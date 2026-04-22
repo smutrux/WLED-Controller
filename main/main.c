@@ -19,6 +19,7 @@
 #include "touch/touch_ft6336.h"
 #include "ui.h"
 #include "esp_psram.h"
+#include "encoder/encoder_nav.h"
 
 static const char *TAG = "main";
 
@@ -156,6 +157,14 @@ void app_main(void)
     ui_build();
     ui_set_status("Status: Ready (no WiFi)", "Segments: --");
     lvgl_unlock();
+
+    // ── Rotary encoder ───────────────────────────────────────────────────────
+    // encoder_nav_init() must run after ui_build() so widget handles are valid.
+    // It starts encoder_task on core 0 — same core as future WiFi tasks.
+    esp_err_t enc_err = encoder_nav_init();
+    if (enc_err != ESP_OK) {
+        ESP_LOGW(TAG, "Encoder init failed — continuing without encoder (0x%x)", enc_err);
+    }
 
     // ── Start LVGL handler task ───────────────────────────────────────────────
     // Pinned to core 1; leave core 0 for WiFi/network tasks in later stages

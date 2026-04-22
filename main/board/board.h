@@ -49,6 +49,25 @@
 #define TCA9554_REG_CONFIG  0x03
 #define TCA9554_PIN_LCD_RST (1 << 1)   // P1
 #define TCA9554_PIN_TP_INT  (1 << 2)   // P2
+
+// ── Rotary encoder ───────────────────────────────────────────────
+// Connect to J8 expansion header using the signals labeled IO38, IO39, IO40.
+// These appear on the camera FPC connector (J2) on the PCB but are free when
+// no camera is attached.  GPIO26-37 are reserved for Octal-SPI PSRAM on the
+// ESP32-S3R8 and MUST NOT be used.
+//
+// Encoder wiring:
+//   Encoder GND → any GND on J8
+//   Encoder +   → 3.3V (VCC3V3) on J8
+//   Encoder CLK → J8 pin labeled IO38   (GPIO38)
+//   Encoder DT  → J8 pin labeled IO39   (GPIO39)
+//   Encoder SW  → J8 pin labeled IO40   (GPIO40)
+//
+// No external pull-up resistors are required — the ESP32 internal pull-ups
+// are enabled in firmware for all three pins.
+#define PIN_ENC_CLK     GPIO_NUM_38
+#define PIN_ENC_DT      GPIO_NUM_39
+#define PIN_ENC_SW      GPIO_NUM_40
  
 // ── Display geometry ─────────────────────────────────────────────
 #define LCD_H_RES       320

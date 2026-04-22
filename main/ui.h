@@ -24,3 +24,9 @@ void ui_set_color(uint32_t rgb);
 
 /** Sync power button state */
 void ui_set_power(bool on);
+
+// ── LVGL thread-safety helpers (defined in main.c) ───────────────────────────
+// Any task other than the LVGL task must bracket LVGL calls with these.
+// They use a recursive mutex so re-entrant calls within the same task are safe.
+void lvgl_lock(void);
+void lvgl_unlock(void);
