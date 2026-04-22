@@ -1,0 +1,175 @@
+/**
+ * main.c — WLED Controller: Stage 1
+ *
+ * ESP-IDF 5.x entry point.
+ * Initializes display, touch, LVGL, and builds the initial UI.
+ * All LVGL calls are guarded by a mutex — required once WiFi tasks are added.
+ */
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "esp_log.h"
+#include "esp_timer.h"
+#include "esp_heap_caps.h"
+#include "lvgl.h"
+
+#include "board/board.h"
+#include "display/display.h"
+#include "touch/touch_ft6336.h"
+#include "ui.h"
+#include "esp_psram.h"
+
+static const char *TAG = "main";
+
+// ── LVGL mutex ───────────────────────────────────────────────────────────────
+// Any task that calls LVGL APIs must take this mutex first.
+// In later stages, the HTTP/poll task will use lvgl_lock() / lvgl_unlock().
+static SemaphoreHandle_t s_lvgl_mutex = NULL;
+
+void lvgl_lock(void) { xSemaphoreTakeRecursive(s_lvgl_mutex, portMAX_DELAY); }
+void lvgl_unlock(void) { xSemaphoreGiveRecursive(s_lvgl_mutex); }
+
+// ── LVGL draw buffers ────────────────────────────────────────────────────────
+static lv_disp_draw_buf_t s_disp_draw_buf;
+static lv_disp_drv_t s_disp_drv;
+static lv_indev_drv_t s_touch_drv;
+static lv_color_t *s_buf1 = NULL;
+static lv_color_t *s_buf2 = NULL;
+
+// ── LVGL tick (esp_timer ISR-safe) ───────────────────────────────────────────
+static void lvgl_tick_cb(void *arg)
+{
+    lv_tick_inc(LVGL_TICK_PERIOD_MS);
+}
+
+// ── Touch input driver callback ───────────────────────────────────────────────
+static void touch_read_cb(lv_indev_drv_t *drv, lv_indev_data_t *data)
+{
+    touch_point_t pt[1];
+    uint8_t count = touch_ft6336_read(pt, 1);
+    if (count > 0)
+    {
+        data->state = LV_INDEV_STATE_PR;
+        data->point.x = pt[0].x;
+        data->point.y = pt[0].y;
+    }
+    else
+    {
+        data->state = LV_INDEV_STATE_REL;
+    }
+}
+
+// ── LVGL handler task ────────────────────────────────────────────────────────
+static void lvgl_task(void *arg)
+{
+    ESP_LOGI(TAG, "LVGL task started on core %d", xPortGetCoreID());
+
+    while (true)
+    {
+        lvgl_lock();
+        uint32_t next_ms = lv_timer_handler();
+        lvgl_unlock();
+        vTaskDelay(pdMS_TO_TICKS(next_ms < 1 ? 1 : (next_ms > 10 ? 10 : next_ms)));
+    }
+}
+
+// ── app_main ─────────────────────────────────────────────────────────────────
+void app_main(void)
+{
+    ESP_LOGI(TAG, "WLED Controller — Stage 1: Screen + UI");
+    ESP_LOGI(TAG, "IDF version: %s", esp_get_idf_version());
+
+    // ── Display ──────────────────────────────────────────────────────────────
+    ESP_ERROR_CHECK(display_init());
+
+    // ── Touch ────────────────────────────────────────────────────────────────
+    esp_err_t touch_err = touch_ft6336_init();
+    if (touch_err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Touch init failed — continuing without touch");
+    }
+
+    // ── LVGL ─────────────────────────────────────────────────────────────────
+    lv_init();
+
+    // Allocate draw buffers — PSRAM preferred
+    size_t buf_bytes = LCD_H_RES * LVGL_DRAW_BUF_LINES * sizeof(lv_color_t);
+    bool has_psram = (esp_psram_get_size() > 0);
+
+    if (has_psram)
+    {
+        s_buf1 = heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        s_buf2 = heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        ESP_LOGI(TAG, "Draw buffers in PSRAM (%zu bytes each)", buf_bytes);
+    }
+    else
+    {
+        s_buf1 = heap_caps_malloc(buf_bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+        s_buf2 = heap_caps_malloc(buf_bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+        ESP_LOGW(TAG, "No PSRAM — draw buffers in internal DMA RAM (%zu bytes each)", buf_bytes);
+    }
+
+    if (!s_buf1 || !s_buf2)
+    {
+        ESP_LOGE(TAG, "Failed to allocate draw buffers! Free heap: %lu",
+                 (unsigned long)esp_get_free_heap_size());
+        abort();
+    }
+
+    lv_disp_draw_buf_init(&s_disp_draw_buf, s_buf1, s_buf2,
+                          LCD_H_RES * LVGL_DRAW_BUF_LINES);
+
+    // Register display driver
+    lv_disp_drv_init(&s_disp_drv);
+    s_disp_drv.hor_res = LCD_H_RES;
+    s_disp_drv.ver_res = LCD_V_RES;
+    s_disp_drv.flush_cb = lvgl_flush_cb;
+    s_disp_drv.draw_buf = &s_disp_draw_buf;
+    s_disp_drv.full_refresh = 0;
+    lv_disp_drv_register(&s_disp_drv);
+
+    // Register touch input driver
+    lv_indev_drv_init(&s_touch_drv);
+    s_touch_drv.type = LV_INDEV_TYPE_POINTER;
+    s_touch_drv.read_cb = touch_read_cb;
+    lv_indev_drv_register(&s_touch_drv);
+
+    // LVGL tick timer
+    const esp_timer_create_args_t tick_args = {
+        .callback = lvgl_tick_cb,
+        .name = "lvgl_tick",
+        .skip_unhandled_events = true,
+    };
+    esp_timer_handle_t tick_timer;
+    ESP_ERROR_CHECK(esp_timer_create(&tick_args, &tick_timer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(tick_timer,
+                                             LVGL_TICK_PERIOD_MS * 1000)); // microseconds
+
+    // Mutex for LVGL thread safety
+    s_lvgl_mutex = xSemaphoreCreateRecursiveMutex();
+
+    ESP_LOGI(TAG, "LVGL initialized");
+
+    // ── Build UI ─────────────────────────────────────────────────────────────
+    lvgl_lock();
+    ui_build();
+    ui_set_status("Status: Ready (no WiFi)", "Segments: --");
+    lvgl_unlock();
+
+    // ── Start LVGL handler task ───────────────────────────────────────────────
+    // Pinned to core 1; leave core 0 for WiFi/network tasks in later stages
+    xTaskCreatePinnedToCore(
+        lvgl_task,
+        "lvgl",
+        8192, // stack bytes
+        NULL,
+        5, // priority
+        NULL,
+        1 // core 1
+    );
+
+    ESP_LOGI(TAG, "Boot complete — LVGL running on core 1");
+
+    // app_main can return; the lvgl_task keeps everything alive
+}

@@ -1,0 +1,10 @@
+## IDF Component Manager manifest
+## Run `idf.py reconfigure` after editing this file to fetch components.
+
+dependencies:
+  idf: '>=5.1.0'
+
+  ## LVGL — maintained port for ESP-IDF
+  ## https://components.espressif.com/components/lvgl/lvgl
+  lvgl/lvgl: ~8.4.0
+  espressif/esp_lcd_st7796: '*'
