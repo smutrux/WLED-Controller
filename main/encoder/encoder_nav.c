@@ -14,7 +14,7 @@
 #include "board/board.h"
 #include "esp_log.h"
 #include "lvgl.h"
-
+#include "esp_check.h"
 
 static const char *TAG = "enc_nav";
 
