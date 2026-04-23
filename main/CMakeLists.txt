@@ -5,6 +5,8 @@ idf_component_register(
         "ui.c"        
         "touch/touch_ft6336.c"
         "board/tca9554.c"
+        "encoder/encoder.c"
+        "encoder/encoder_nav.c"
     INCLUDE_DIRS "."
     REQUIRES
         lvgl
@@ -12,4 +14,5 @@ idf_component_register(
         driver
         esp_lcd
         esp_psram
+        esp_driver_pcnt
 )

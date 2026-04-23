@@ -108,7 +108,7 @@ Integrate LVGL 8.x with the `esp_lcd` flush callback. Allocate double-buffered d
 ### Stage 3 — Touch ✅
 Get the FT6336 touch controller reporting coordinates into LVGL's input device system.
 
-### Stage 4 — Rotary encoder
+### Stage 4 — Rotary encoder ✅
 Decode signals from the encoder using the ESP32's **PCNT (Pulse Counter)** peripheral. PCNT handles the signal in hardware without polling, giving reliable decodes even at fast rotation speeds. The encoder's push button will be wired to a standard GPIO with interrupt.
 
 ### Stage 5 — WiFi
