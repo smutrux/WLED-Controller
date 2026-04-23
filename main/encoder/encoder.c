@@ -102,8 +102,8 @@ static esp_err_t pcnt_encoder_init(void)
     // CLK falling + DT high  →  +1 (CW)
     // CLK falling + DT low   →  -1 (CCW)  (inverse of above)
     pcnt_channel_set_edge_action(s_pcnt_chan_a,
-        PCNT_CHANNEL_EDGE_ACTION_DECREASE,   // CLK rising → count down
-        PCNT_CHANNEL_EDGE_ACTION_INCREASE);  // CLK falling → count up
+        PCNT_CHANNEL_EDGE_ACTION_INCREASE,   // CLK rising → count down
+        PCNT_CHANNEL_EDGE_ACTION_DECREASE);  // CLK falling → count up
     pcnt_channel_set_level_action(s_pcnt_chan_a,
         PCNT_CHANNEL_LEVEL_ACTION_KEEP,      // DT high → keep direction as-is
         PCNT_CHANNEL_LEVEL_ACTION_INVERSE);  // DT low  → invert direction
@@ -117,8 +117,8 @@ static esp_err_t pcnt_encoder_init(void)
                         TAG, "pcnt_new_channel B");
 
     pcnt_channel_set_edge_action(s_pcnt_chan_b,
-        PCNT_CHANNEL_EDGE_ACTION_INCREASE,   // DT rising → count up
-        PCNT_CHANNEL_EDGE_ACTION_DECREASE);  // DT falling → count down
+        PCNT_CHANNEL_EDGE_ACTION_DECREASE,   // DT rising → count up
+        PCNT_CHANNEL_EDGE_ACTION_INCREASE);  // DT falling → count down
     pcnt_channel_set_level_action(s_pcnt_chan_b,
         PCNT_CHANNEL_LEVEL_ACTION_KEEP,      // CLK high → keep direction
         PCNT_CHANNEL_LEVEL_ACTION_INVERSE);  // CLK low  → invert direction
