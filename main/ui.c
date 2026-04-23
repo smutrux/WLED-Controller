@@ -85,12 +85,12 @@ void ui_build(void)
     lv_obj_set_style_pad_hor(header, 10, 0);
     lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *dot = lv_obj_create(header);
-    lv_obj_set_size(dot, 10, 10);
-    lv_obj_align(dot, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(dot, lv_palette_main(LV_PALETTE_GREEN), 0);
-    lv_obj_set_style_border_width(dot, 0, 0);
+    s_wifi_dot = lv_obj_create(header);
+    lv_obj_set_size(s_wifi_dot, 10, 10);
+    lv_obj_align(s_wifi_dot, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_set_style_radius(s_wifi_dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(s_wifi_dot, lv_color_hex(0x555555), 0); // grey until WiFi connects
+    lv_obj_set_style_border_width(s_wifi_dot, 0, 0);
 
     lv_obj_t *title = lv_label_create(header);
     lv_label_set_text(title, "WLED Controller");
@@ -247,10 +247,12 @@ void ui_set_wifi_status(wifi_conn_state_t state)
     lv_color_t color;
     switch (state) {
     case WIFI_STATE_CONNECTED:
-        color = lv_palette_main(LV_PALETTE_GREEN);
+        // color = lv_palette_main(LV_PALETTE_GREEN);
+        color = lv_color_hex(0x1010A0);
         break;
-    case WIFI_STATE_CONNECTING:
-        color = lv_palette_main(LV_PALETTE_YELLOW);
+        case WIFI_STATE_CONNECTING:
+        // color = lv_palette_main(LV_PALETTE_YELLOW);
+        color = lv_color_hex(0xA010A0);
         break;
     case WIFI_STATE_DISCONNECTED:
     default:

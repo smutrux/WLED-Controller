@@ -156,7 +156,7 @@ void app_main(void)
     // ── Build UI ─────────────────────────────────────────────────────────────
     lvgl_lock();
     ui_build();
-    ui_set_status("Status: Ready (no WiFi)", "Segments: --");
+    ui_set_status("Status: Test UI (not functional)", "Segments: --");
     lvgl_unlock();
 
     // ── Rotary encoder ───────────────────────────────────────────────────────
