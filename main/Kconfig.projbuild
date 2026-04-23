@@ -1,0 +1,25 @@
+menu "WLED Controller"
+
+    config WLED_WIFI_SSID
+        string "WiFi SSID"
+        default "your_ssid"
+        help
+            The SSID of the WiFi network to connect to.
+            Set via: idf.py menuconfig → WLED Controller
+
+    config WLED_WIFI_PASSWORD
+        string "WiFi Password"
+        default "your_password"
+        help
+            The password for the WiFi network.
+            Leave empty for open networks.
+
+    config WLED_HOST
+        string "WLED device IP or hostname"
+        default "192.168.1.100"
+        help
+            IP address or mDNS hostname of the WLED instance.
+            Used for HTTP requests in later stages.
+            Example: 192.168.1.42  or  wled.local
+
+endmenu

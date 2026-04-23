@@ -7,6 +7,7 @@ idf_component_register(
         "board/tca9554.c"
         "encoder/encoder.c"
         "encoder/encoder_nav.c"
+        "wifi/wifi.c"
     INCLUDE_DIRS "."
     REQUIRES
         lvgl
@@ -15,4 +16,8 @@ idf_component_register(
         esp_lcd
         esp_psram
         esp_driver_pcnt
+        esp_wifi
+        nvs_flash
+        esp_event
+        esp_netif
 )

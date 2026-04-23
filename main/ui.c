@@ -24,6 +24,7 @@ lv_obj_t *ui_brightness_label = NULL;
 lv_obj_t *ui_color_preview    = NULL;
 lv_obj_t *ui_power_btn        = NULL;
 lv_obj_t *ui_power_btn_label  = NULL;
+static lv_obj_t *s_wifi_dot = NULL;  // connection status dot in header
 
 // Simulated WLED state — replaced by real poll data in a later stage
 static bool    wled_on         = true;
@@ -237,4 +238,24 @@ void ui_set_power(bool on)
             on ? lv_palette_main(LV_PALETTE_ORANGE) : lv_color_hex(0x444444), 0);
     if (ui_power_btn_label)
         lv_label_set_text(ui_power_btn_label, on ? "ON" : "OFF");
+}
+
+void ui_set_wifi_status(wifi_conn_state_t state)
+{
+    if (!s_wifi_dot) return;
+
+    lv_color_t color;
+    switch (state) {
+    case WIFI_STATE_CONNECTED:
+        color = lv_palette_main(LV_PALETTE_GREEN);
+        break;
+    case WIFI_STATE_CONNECTING:
+        color = lv_palette_main(LV_PALETTE_YELLOW);
+        break;
+    case WIFI_STATE_DISCONNECTED:
+    default:
+        color = lv_color_hex(0x555555);
+        break;
+    }
+    lv_obj_set_style_bg_color(s_wifi_dot, color, 0);
 }

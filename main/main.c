@@ -20,6 +20,7 @@
 #include "ui.h"
 #include "esp_psram.h"
 #include "encoder/encoder_nav.h"
+#include "wifi/wifi.h"
 
 static const char *TAG = "main";
 
@@ -164,6 +165,15 @@ void app_main(void)
     esp_err_t enc_err = encoder_nav_init();
     if (enc_err != ESP_OK) {
         ESP_LOGW(TAG, "Encoder init failed — continuing without encoder (0x%x)", enc_err);
+    }
+
+    // ── WiFi ─────────────────────────────────────────────────────────────────
+    // wifi_init() starts the STA driver and begins connecting. The event
+    // handler updates the UI dot (grey→yellow→green) and schedules retries.
+    // NVS init is handled inside wifi_init() — no need to call it here.
+    esp_err_t wifi_err = wifi_init();
+    if (wifi_err != ESP_OK) {
+        ESP_LOGW(TAG, "WiFi init failed (0x%x) — continuing offline", wifi_err);
     }
 
     // ── Start LVGL handler task ───────────────────────────────────────────────
