@@ -9,6 +9,12 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 
+# ── Partition table ─────────────────────────────────────────────────────────
+# Default table only gives 1 MB to the app; our binary exceeds that.
+# partitions.csv gives 3 MB to factory on the 16 MB flash.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
 # ── PSRAM (OPI PSRAM on this board) ─────────────────────────────────────────
 CONFIG_ESP32S3_SPIRAM_SUPPORT=y
 CONFIG_SPIRAM_MODE_OCT=y
@@ -20,7 +26,10 @@ CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
 CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y
 
 # ── USB Serial (ESP32-S3 has built-in USB CDC) ───────────────────────────────
-CONFIG_ESP_CONSOLE_USB_CDC=y
+# USB Serial/JTAG peripheral (hardware, non-blocking — drops chars when full
+# rather than stalling the calling task like USB CDC does).
+# Uses the same physical USB cable; Windows shows a "USB JTAG/serial debug unit" port.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
 # ── Stack sizes ──────────────────────────────────────────────────────────────
@@ -40,8 +49,6 @@ CONFIG_LV_FONT_MONTSERRAT_12=y
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_16=y
 CONFIG_LV_FONT_MONTSERRAT_20=y
-CONFIG_LV_FONT_MONTSERRAT_24=y
-CONFIG_LV_FONT_MONTSERRAT_36=y
 CONFIG_LV_USE_THEME_DEFAULT=y
 CONFIG_LV_THEME_DEFAULT_DARK=y
 CONFIG_LV_USE_FLEX=y
@@ -53,4 +60,5 @@ CONFIG_LV_USE_ARC=y
 CONFIG_LV_USE_COLORWHEEL=y
 CONFIG_LV_USE_SPINNER=y
 
+# Suppress legacy I2C driver EOL warning (safe to use until IDF v7.0)
 CONFIG_I2C_SUPPRESS_DEPRECATE_WARN=y

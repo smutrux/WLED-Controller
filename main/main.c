@@ -20,6 +20,8 @@
 #include "ui.h"
 #include "esp_psram.h"
 #include "encoder/encoder_nav.h"
+#include "wifi/wifi.h"
+#include "devices/wled_devices.h"
 
 static const char *TAG = "main";
 
@@ -155,7 +157,7 @@ void app_main(void)
     // ── Build UI ─────────────────────────────────────────────────────────────
     lvgl_lock();
     ui_build();
-    ui_set_status("Status: Ready (no WiFi)", "Segments: --");
+    ui_set_status("Status: Test UI (not functional)", "Segments: --");
     lvgl_unlock();
 
     // ── Rotary encoder ───────────────────────────────────────────────────────
@@ -165,6 +167,35 @@ void app_main(void)
     if (enc_err != ESP_OK) {
         ESP_LOGW(TAG, "Encoder init failed — continuing without encoder (0x%x)", enc_err);
     }
+
+    // ── WiFi ─────────────────────────────────────────────────────────────────
+    // wifi_init() starts the STA driver and begins connecting. The event
+    // handler updates the UI dot (grey→yellow→green) and schedules retries.
+    // NVS init is handled inside wifi_init() — no need to call it here.
+    esp_err_t wifi_err = wifi_init();
+    if (wifi_err != ESP_OK) {
+        ESP_LOGW(TAG, "WiFi init failed (0x%x) — continuing offline", wifi_err);
+    }
+
+    // ── WLED device registry ──────────────────────────────────────────────────
+    // Loads any previously saved devices from NVS.  On first boot the list
+    // is empty and the seed block below populates it once.
+    wled_devices_init();
+
+    if (wled_devices_count() == 0) {
+        // ── Seed your 6 WLED instances here (runs once, persisted to NVS) ────
+        // After the first boot these are loaded from NVS automatically.
+        // To change IPs later: call wled_devices_remove() + wled_devices_add(),
+        // or add a settings screen in the UI.
+        wled_devices_add("Tall",    "10.0.0.65");
+        wled_devices_add("Multi",   "10.0.0.126");
+        wled_devices_add("Shelf",   "10.0.0.139");
+            wled_devices_add("Closet",  "10.0.0.250");
+        ESP_LOGI(TAG, "Seeded %d WLED devices", wled_devices_count());
+    }
+
+    // Default: broadcast to all devices
+    wled_devices_set_selected(WLED_TARGET_ALL);
 
     // ── Start LVGL handler task ───────────────────────────────────────────────
     // Pinned to core 1; leave core 0 for WiFi/network tasks in later stages

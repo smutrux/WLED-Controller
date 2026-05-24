@@ -24,6 +24,7 @@ lv_obj_t *ui_brightness_label = NULL;
 lv_obj_t *ui_color_preview    = NULL;
 lv_obj_t *ui_power_btn        = NULL;
 lv_obj_t *ui_power_btn_label  = NULL;
+static lv_obj_t *s_wifi_dot = NULL;  // connection status dot in header
 
 // Simulated WLED state — replaced by real poll data in a later stage
 static bool    wled_on         = true;
@@ -84,12 +85,12 @@ void ui_build(void)
     lv_obj_set_style_pad_hor(header, 10, 0);
     lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *dot = lv_obj_create(header);
-    lv_obj_set_size(dot, 10, 10);
-    lv_obj_align(dot, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(dot, lv_palette_main(LV_PALETTE_GREEN), 0);
-    lv_obj_set_style_border_width(dot, 0, 0);
+    s_wifi_dot = lv_obj_create(header);
+    lv_obj_set_size(s_wifi_dot, 10, 10);
+    lv_obj_align(s_wifi_dot, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_set_style_radius(s_wifi_dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(s_wifi_dot, lv_color_hex(0x555555), 0); // grey until WiFi connects
+    lv_obj_set_style_border_width(s_wifi_dot, 0, 0);
 
     lv_obj_t *title = lv_label_create(header);
     lv_label_set_text(title, "WLED Controller");
@@ -237,4 +238,26 @@ void ui_set_power(bool on)
             on ? lv_palette_main(LV_PALETTE_ORANGE) : lv_color_hex(0x444444), 0);
     if (ui_power_btn_label)
         lv_label_set_text(ui_power_btn_label, on ? "ON" : "OFF");
+}
+
+void ui_set_wifi_status(wifi_conn_state_t state)
+{
+    if (!s_wifi_dot) return;
+
+    lv_color_t color;
+    switch (state) {
+    case WIFI_STATE_CONNECTED:
+        // color = lv_palette_main(LV_PALETTE_GREEN);
+        color = lv_color_hex(0xAE3FE1);
+        break;
+        case WIFI_STATE_CONNECTING:
+        // color = lv_palette_main(LV_PALETTE_YELLOW);
+        color = lv_color_hex(0x001AF4);
+        break;
+    case WIFI_STATE_DISCONNECTED:
+    default:
+        color = lv_color_hex(0x555555);
+        break;
+    }
+    lv_obj_set_style_bg_color(s_wifi_dot, color, 0);
 }

@@ -1,0 +1,22 @@
+menu "WLED Controller"
+
+    config WLED_WIFI_SSID
+        string "WiFi SSID"
+        default "your_ssid"
+        help
+            The SSID of the WiFi network to connect to.
+            Set via: idf.py menuconfig → WLED Controller
+
+    config WLED_WIFI_PASSWORD
+        string "WiFi Password"
+        default "your_password"
+        help
+            The password for the WiFi network.
+            Leave empty for open networks.
+
+    # WLED device IPs are managed at runtime via the device registry
+    # (wled_devices_add / wled_devices_remove) and stored in NVS.
+    # There is no compile-time WLED_HOST — this allows adding, removing,
+    # and selecting devices from the controller UI without reflashing.
+
+endmenu
