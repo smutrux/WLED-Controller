@@ -1,5 +1,5 @@
 /**
- * main.c — WLED Controller: Stage 7
+ * main.c — WLED Controller: Stage 9
  *
  * ESP-IDF 5.x entry point.
  * Initializes display, touch, LVGL, and builds the initial UI.
@@ -24,6 +24,7 @@
 #include "devices/wled_devices.h"
 #include "http/wled_http.h"
 #include "cmd/wled_cmd.h"
+#include "poll/wled_poll.h"
 
 static const char *TAG = "main";
 
@@ -82,7 +83,7 @@ static void lvgl_task(void *arg)
 // ── app_main ─────────────────────────────────────────────────────────────────
 void app_main(void)
 {
-    ESP_LOGI(TAG, "WLED Controller — Stage 7: Button + slider HTTP");
+    ESP_LOGI(TAG, "WLED Controller — Stage 9: State polling");
     ESP_LOGI(TAG, "IDF version: %s", esp_get_idf_version());
 
     // ── Display ──────────────────────────────────────────────────────────────
@@ -197,6 +198,14 @@ void app_main(void)
     esp_err_t cmd_err = wled_cmd_init();
     if (cmd_err != ESP_OK) {
         ESP_LOGW(TAG, "Command layer init failed (0x%x)", cmd_err);
+    }
+
+    // ── State polling task ────────────────────────────────────────────────────
+    // GETs /json/state every CONFIG_WLED_POLL_INTERVAL_MS and pushes updates
+    // to the UI. Skips UI updates for WLED_POLL_CMD_HOLD_MS after any command.
+    esp_err_t poll_err = wled_poll_init();
+    if (poll_err != ESP_OK) {
+        ESP_LOGW(TAG, "Poll init failed (0x%x)", poll_err);
     }
 
     // ── Start LVGL handler task ───────────────────────────────────────────────

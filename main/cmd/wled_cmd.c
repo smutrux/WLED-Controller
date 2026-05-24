@@ -27,6 +27,7 @@
 #include "esp_log.h"
 #include "esp_check.h"
 #include "esp_timer.h"
+#include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -51,6 +52,9 @@ static portMUX_TYPE      s_lock      = portMUX_INITIALIZER_UNLOCKED;
 static volatile uint32_t s_pending   = 0;     // bitmask of cmd_flag_t
 static volatile bool     s_power     = true;
 static volatile uint8_t  s_brightness = 128;
+
+// ── Last-sent timestamp (microseconds, from esp_timer_get_time) ──────────────
+static volatile int64_t s_last_sent_us = 0;
 
 // ── Task handle for notifications ─────────────────────────────────────────────
 static TaskHandle_t s_cmd_task_handle = NULL;
@@ -93,6 +97,9 @@ static void wled_cmd_task(void *arg)
         power      = s_power;
         brightness = s_brightness;
         portEXIT_CRITICAL(&s_lock);
+
+        // Record send time for poll task conflict avoidance
+        s_last_sent_us = esp_timer_get_time();
 
         // Handle power command
         if (flags & CMD_POWER) {
@@ -177,4 +184,11 @@ void wled_cmd_set_brightness(uint8_t bri)
     esp_timer_stop(s_bri_timer);   // no-op if not running
     esp_timer_start_once(s_bri_timer,
                          WLED_CMD_BRIGHTNESS_DEBOUNCE_MS * 1000ULL);
+}
+
+bool wled_cmd_recently_sent(uint32_t within_ms)
+{
+    if (s_last_sent_us == 0) return false;
+    int64_t elapsed_ms = (esp_timer_get_time() - s_last_sent_us) / 1000LL;
+    return elapsed_ms < (int64_t)within_ms;
 }

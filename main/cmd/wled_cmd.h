@@ -50,3 +50,11 @@ void wled_cmd_set_brightness(uint8_t bri);
 #ifdef __cplusplus
 }
 #endif
+
+/**
+ * Returns true if a command was sent within the last `within_ms` milliseconds.
+ * Used by the poll task to suppress UI updates immediately after a user action,
+ * preventing the old device state from flickering back onto the screen before
+ * the device has processed the command.
+ */
+bool wled_cmd_recently_sent(uint32_t within_ms);

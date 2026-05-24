@@ -25,12 +25,13 @@ lv_obj_t *ui_brightness_label = NULL;
 lv_obj_t *ui_color_preview    = NULL;
 lv_obj_t *ui_power_btn        = NULL;
 lv_obj_t *ui_power_btn_label  = NULL;
-static lv_obj_t *s_wifi_dot = NULL;  // connection status dot in header
+static lv_obj_t *s_wifi_dot  = NULL;
+static lv_obj_t *s_fx_label  = NULL;   // effect row label, updated by poll  // connection status dot in header
 
 // Simulated WLED state — replaced by real poll data in a later stage
 static bool    wled_on         = true;
 static uint8_t wled_brightness = 128;
-static uint32_t wled_color     = 0x0000FF;
+static uint32_t wled_color     = 0xFF0000;
 
 // ── Event handlers ───────────────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ static void on_power_click(lv_event_t *e)
     wled_on = !wled_on;
     lv_label_set_text(ui_power_btn_label, wled_on ? "ON" : "OFF");
     lv_obj_set_style_bg_color(ui_power_btn,
-        wled_on ? lv_palette_main(LV_PALETTE_ORANGE) : lv_color_hex(0x444444), 0);
+        wled_on ? lv_palette_main(LV_PALETTE_BLUE) : lv_color_hex(0x444444), 0);
     ESP_LOGI(TAG, "Power toggled -> %s", wled_on ? "ON" : "OFF");
     wled_cmd_set_power(wled_on);
 }
@@ -66,8 +67,8 @@ void ui_build(void)
     // Apply dark theme with orange accent
     lv_theme_t *theme = lv_theme_default_init(
         lv_disp_get_default(),
-        lv_palette_main(LV_PALETTE_ORANGE),
-        lv_palette_main(LV_PALETTE_CYAN),
+        lv_palette_main(LV_PALETTE_BLUE),
+        lv_palette_main(LV_PALETTE_LIGHT_BLUE),
         true,   // dark
         &lv_font_montserrat_16
     );
@@ -139,7 +140,7 @@ void ui_build(void)
     ui_brightness_slider = lv_slider_create(scr);
     lv_slider_set_range(ui_brightness_slider, 0, 255);
     lv_slider_set_value(ui_brightness_slider, wled_brightness, LV_ANIM_OFF);
-    lv_obj_set_size(ui_brightness_slider, LCD_H_RES - 90, 8);
+    lv_obj_set_size(ui_brightness_slider, LCD_H_RES - 80, 8);
     lv_obj_align(ui_brightness_slider, LV_ALIGN_TOP_LEFT, 12, 182);
     lv_obj_set_style_bg_color(ui_brightness_slider, lv_color_hex(0x333333), LV_PART_MAIN);
     lv_obj_set_style_bg_color(ui_brightness_slider,
@@ -192,8 +193,9 @@ void ui_build(void)
     lv_obj_set_style_pad_hor(fx_card, 12, 0);
     lv_obj_clear_flag(fx_card, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *fx_lbl = lv_label_create(fx_card);
-    lv_label_set_text(fx_lbl, "Effect: Solid");
+    s_fx_label = lv_label_create(fx_card);
+    lv_obj_t *fx_lbl = s_fx_label;   // alias for style calls below
+    lv_label_set_text(fx_lbl, "Effect: --");
     lv_obj_set_style_text_font(fx_lbl, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(fx_lbl, lv_color_hex(0x888888), 0);
     lv_obj_align(fx_lbl, LV_ALIGN_LEFT_MID, 0, 0);
@@ -249,11 +251,9 @@ void ui_set_wifi_status(wifi_conn_state_t state)
     switch (state) {
     case WIFI_STATE_CONNECTED:
         color = lv_palette_main(LV_PALETTE_GREEN);
-        // color = lv_color_hex(0xAE3FE1);
         break;
         case WIFI_STATE_CONNECTING:
         color = lv_palette_main(LV_PALETTE_YELLOW);
-        // color = lv_color_hex(0x001AF4);
         break;
     case WIFI_STATE_DISCONNECTED:
     default:
@@ -261,4 +261,12 @@ void ui_set_wifi_status(wifi_conn_state_t state)
         break;
     }
     lv_obj_set_style_bg_color(s_wifi_dot, color, 0);
+}
+
+void ui_set_effect(int fx_index)
+{
+    if (!s_fx_label) return;
+    // Stage 10 will resolve the name from /json/eff.
+    // For now show the numeric index so the poll is clearly working.
+    lv_label_set_text_fmt(s_fx_label, "Effect: %d", fx_index);
 }

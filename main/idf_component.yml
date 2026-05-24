@@ -8,3 +8,7 @@ dependencies:
   ## https://components.espressif.com/components/lvgl/lvgl
   lvgl/lvgl: ~8.4.0
   espressif/esp_lcd_st7796: '*'
+
+  ## cJSON — removed from ESP-IDF core in v6.0, now a managed component
+  espressif/cjson: '^1.7.19'
+  
