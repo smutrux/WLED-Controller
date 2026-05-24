@@ -1,18 +1,15 @@
 # Waveshare ESP32-S3 Touch LCD 3.5" — 16MB flash
 #
 # Layout:
-#   0x0000  – 0x8000  : bootloader        (32 KB, managed by IDF)
-#   0x8000  – 0x9000  : partition table    (4 KB, this file)
-#   0x9000  – 0xF000  : nvs               (24 KB)
-#   0xF000  – 0x10000 : phy_init           (4 KB)
-#   0x10000 – 0x310000: factory app        (3 MB)  ← was 1 MB in default table
-#   0x310000– end     : storage (FAT/SPIFFS)(~12.9 MB, available for future use)
-#
-# Binary was 1.09 MB when the overflow occurred. 3 MB gives ample headroom
-# for the remaining WiFi/HTTP/UI stages and any future features.
+#   0x0000  - 0x8000   bootloader        (32 KB, managed by IDF)
+#   0x8000  - 0x9000   partition table   (4 KB, this file)
+#   0x9000  - 0xF000   nvs               (24 KB)
+#   0xF000  - 0x10000  phy_init          (4 KB)
+#   0x10000 - 0x310000 factory app       (3 MB)
+#   0x310000- 0x410000 storage (SPIFFS)  (1 MB)  hosts devices.cfg
 #
 # Name,     Type,  SubType,  Offset,    Size
 nvs,        data,  nvs,      0x9000,    0x6000,
 phy_init,   data,  phy,      0xF000,    0x1000,
 factory,    app,   factory,  0x10000,   0x300000,
-storage,    data,  fat,      0x310000,  0xCF0000,
+storage,    data,  spiffs,   0x310000,  0x100000,
