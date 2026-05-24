@@ -13,8 +13,8 @@
 #include "ui.h"
 #include "board/board.h"
 #include "esp_log.h"
-#include "lvgl.h"
 #include "esp_check.h"
+#include "lvgl.h"
 
 static const char *TAG = "enc_nav";
 
@@ -116,7 +116,7 @@ static void set_focus(int new_idx)
     lv_obj_t *nw = focused_widget();
     if (nw) {
         apply_focus_style(nw, false);
-        ESP_LOGI(TAG, "Focus → %s", k_targets[new_idx].name);
+        ESP_LOGD(TAG, "Focus → %s", k_targets[new_idx].name);
     }
 }
 
@@ -150,7 +150,7 @@ static void activate_focused(void)
     switch (t->type) {
     case TARGET_TYPE_BUTTON:
         // Fire a click event — the button's on_power_click handler does the rest
-        ESP_LOGI(TAG, "Encoder press → toggle %s", t->name);
+        ESP_LOGD(TAG, "Encoder press → toggle %s", t->name);
         lv_event_send(widget, LV_EVENT_CLICKED, NULL);
         break;
 
@@ -159,18 +159,18 @@ static void activate_focused(void)
             // Enter edit mode
             s_mode = NAV_MODE_EDIT;
             apply_focus_style(widget, true);   // switch to cyan outline
-            ESP_LOGI(TAG, "Encoder press → edit %s", t->name);
+            ESP_LOGD(TAG, "Encoder press → edit %s", t->name);
         } else {
             // Exit edit mode, return to navigate
             s_mode = NAV_MODE_NAVIGATE;
             apply_focus_style(widget, false);  // back to orange outline
-            ESP_LOGI(TAG, "Encoder press → deselect %s", t->name);
+            ESP_LOGD(TAG, "Encoder press → deselect %s", t->name);
         }
         break;
 
     case TARGET_TYPE_ACTION:
         // Fire a click event (color picker, etc.)
-        ESP_LOGI(TAG, "Encoder press → action %s", t->name);
+        ESP_LOGD(TAG, "Encoder press → action %s", t->name);
         lv_event_send(widget, LV_EVENT_CLICKED, NULL);
         break;
     }

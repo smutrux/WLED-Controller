@@ -22,12 +22,12 @@
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "nvs_flash.h"
-#include "esp_timer.h"   // esp_timer_handle_t, esp_timer_create_args_t, esp_timer_create/stop/start_once
-#include "esp_check.h"   // ESP_RETURN_ON_ERROR
+#include "esp_timer.h"
+#include "esp_check.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
-static const char *TAG = "wifi";
+static const char *TAG = "wled_wifi";  // distinct from the driver's own "wifi" tag
 
 // ── Tuning ────────────────────────────────────────────────────────────────────
 // 0 = retry forever (recommended for a portable device)
@@ -42,6 +42,19 @@ static esp_netif_t               *s_netif    = NULL;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Convert a wifi_conn_state_t enum to a readable string for logging.
+ *  Never pass the raw enum to a %s format specifier — it is an integer,
+ *  not a pointer, and will cause a LoadProhibited crash in vfprintf. */
+static const char *wifi_state_str(wifi_conn_state_t state)
+{
+    switch (state) {
+    case WIFI_STATE_CONNECTED:    return "CONNECTED";
+    case WIFI_STATE_CONNECTING:   return "CONNECTING";
+    case WIFI_STATE_DISCONNECTED: return "DISCONNECTED";
+    default:                      return "UNKNOWN";
+    }
+}
+
 /** Compute backoff delay in milliseconds for the current retry count. */
 static uint32_t backoff_ms(void)
 {
@@ -54,6 +67,8 @@ static uint32_t backoff_ms(void)
 /** Push a connection state change to the WiFi driver and update the UI dot. */
 static void set_state(wifi_conn_state_t new_state)
 {
+    ESP_LOGI(TAG, "WiFi state: %s -> %s",
+             wifi_state_str(s_state), wifi_state_str(new_state));
     s_state = new_state;
 
     // Update UI from whatever task we're on — must hold LVGL mutex
@@ -66,8 +81,12 @@ static void set_state(wifi_conn_state_t new_state)
 
 static void retry_connect(void *arg)
 {
+    // NOTE: Do NOT call set_state() / lvgl_lock() here.
+    // esp_timer callbacks share one task with the LVGL tick timer.
+    // Blocking on lvgl_lock() here would freeze the LVGL clock entirely,
+    // halting all input processing.  State is already CONNECTING — it was
+    // set in the DISCONNECTED event handler before this timer was started.
     ESP_LOGI(TAG, "Retrying WiFi connection (attempt %d)…", s_retries + 1);
-    set_state(WIFI_STATE_CONNECTING);
     esp_wifi_connect();
 }
 
@@ -124,6 +143,13 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&ev->ip_info.ip));
         s_retries = 0;   // reset backoff counter on successful connect
         set_state(WIFI_STATE_CONNECTED);
+
+        // Disable WiFi power-save mode. The default WIFI_PS_MIN_MODEM sleeps
+        // the radio between beacon intervals, which causes some routers to send
+        // a deauth and reassociate — appearing as a spurious yellow flash on the
+        // status dot. WIFI_PS_NONE keeps the radio on continuously. Current draw
+        // increases ~20 mA but the connection stays stable and the dot stays green.
+        esp_wifi_set_ps(WIFI_PS_NONE);
     }
 }
 
@@ -195,6 +221,15 @@ esp_err_t wifi_init(void)
 
     // ── Start — WIFI_EVENT_STA_START will trigger the first connect ───────────
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "esp_wifi_start");
+
+    // Silence the WiFi driver's verbose internal logging. The driver uses several
+    // tag names; all need to be suppressed or they flood the console during
+    // reconnect loops and can starve other tasks (especially on USB CDC console).
+    esp_log_level_set("wifi",          ESP_LOG_WARN);
+    esp_log_level_set("wifi_init",     ESP_LOG_WARN);
+    esp_log_level_set("phy_init",      ESP_LOG_WARN);
+    esp_log_level_set("phy",           ESP_LOG_WARN);
+    esp_log_level_set("esp_netif_lwip",ESP_LOG_WARN);
 
     ESP_LOGI(TAG, "WiFi init done — connecting to \"%s\"",
              CONFIG_WLED_WIFI_SSID);

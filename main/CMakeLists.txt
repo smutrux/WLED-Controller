@@ -2,12 +2,13 @@ idf_component_register(
     SRCS
         "main.c"
         "display/display.c"
-        "ui.c"        
+        "ui.c"
         "touch/touch_ft6336.c"
         "board/tca9554.c"
         "encoder/encoder.c"
         "encoder/encoder_nav.c"
         "wifi/wifi.c"
+        "devices/wled_devices.c"
     INCLUDE_DIRS "."
     REQUIRES
         lvgl

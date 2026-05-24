@@ -81,6 +81,7 @@ Thumbs.db
 *.tmp
 *.swp
 *~
+external_files/
 
 
 managed_components/

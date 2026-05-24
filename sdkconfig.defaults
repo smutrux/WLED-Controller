@@ -26,7 +26,10 @@ CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
 CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y
 
 # ── USB Serial (ESP32-S3 has built-in USB CDC) ───────────────────────────────
-CONFIG_ESP_CONSOLE_USB_CDC=y
+# USB Serial/JTAG peripheral (hardware, non-blocking — drops chars when full
+# rather than stalling the calling task like USB CDC does).
+# Uses the same physical USB cable; Windows shows a "USB JTAG/serial debug unit" port.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
 # ── Stack sizes ──────────────────────────────────────────────────────────────

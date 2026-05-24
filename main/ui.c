@@ -248,11 +248,11 @@ void ui_set_wifi_status(wifi_conn_state_t state)
     switch (state) {
     case WIFI_STATE_CONNECTED:
         // color = lv_palette_main(LV_PALETTE_GREEN);
-        color = lv_color_hex(0x1010A0);
+        color = lv_color_hex(0xAE3FE1);
         break;
         case WIFI_STATE_CONNECTING:
         // color = lv_palette_main(LV_PALETTE_YELLOW);
-        color = lv_color_hex(0xA010A0);
+        color = lv_color_hex(0x001AF4);
         break;
     case WIFI_STATE_DISCONNECTED:
     default:
