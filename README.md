@@ -51,7 +51,7 @@ The Waveshare board does not expose LCD_RST or the touch controller's INT/RST pi
 
 The firmware is written in C using **ESP-IDF 6.0** (not Arduino). Each concern lives in its own file; `main.c` only orchestrates init and task creation.
 
-```
+<!-- ```
 wled-controller/
 ├── CMakeLists.txt
 ├── sdkconfig.defaults          ← committed; sdkconfig is gitignored
@@ -66,7 +66,7 @@ wled-controller/
     ├── touch/
     │   ├── touch_ft6336.c/.h   ← FT6336 I2C touch driver, polling mode
     └── ui.c/.h                 ← LVGL widget tree, event handlers, state update helpers
-```
+``` -->
 ---
 
 ## Build and flash
@@ -111,7 +111,7 @@ Get the FT6336 touch controller reporting coordinates into LVGL's input device s
 ### Stage 4 — Rotary encoder ✅
 Decode signals from the encoder using the ESP32's **PCNT (Pulse Counter)** peripheral. PCNT handles the signal in hardware without polling, giving reliable decodes even at fast rotation speeds. The encoder's push button will be wired to a standard GPIO with interrupt.
 
-### Stage 5 — WiFi
+### Stage 5 — WiFi ✅
 Connect to a WiFi network using `esp_wifi`. Implement automatic reconnection using the event loop (`WIFI_EVENT_STA_DISCONNECTED` → retry with exponential backoff). Display connection status on the UI header dot (grey → yellow connecting → green connected).
 
 ### Stage 6 — Manual HTTP test
