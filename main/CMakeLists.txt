@@ -11,6 +11,7 @@ idf_component_register(
         "devices/wled_devices.c"
         "http/wled_http.c"
         "cmd/wled_cmd.c"
+        "poll/wled_poll.c"
     INCLUDE_DIRS "."
     REQUIRES
         lvgl

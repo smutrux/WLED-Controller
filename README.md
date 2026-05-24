@@ -123,8 +123,8 @@ Wire the power button and brightness slider in the UI to `POST /json/state` with
 ### Stage 8 — Encoder controls brightness ✅
 Translate PCNT count deltas into brightness POST requests. Debounce rapid turns with a short timer so that spinning quickly sends one request at the end of the motion rather than dozens during it.
 
-### Stage 9 — Poll WLED state
-Spawn a task on core 0 that `GET /json/state`s every [TBD] seconds. Parse the JSON response (brightness, color, on/off, effect name) and push updates to the UI via `lvgl_lock()`. This makes the controller a true two-way interface: changes from the WLED web app or automations appear on the controller without any user action.
+### Stage 9 — Poll WLED state ✅
+Spawn a task on core 0 that `GET /json/state`s every 0.5 - 30 seconds (configure in `idf.py menuconfig`). Parse the JSON response (brightness, color, on/off, effect name) and push updates to the UI via `lvgl_lock()`. This makes the controller a true two-way interface: changes from the WLED web app or automations appear on the controller without any user action.
 
 ### Stage 10 — Final UI
 Redesign the UI layout now that all data flows are working. Likely a tabview: **Brightness / Color / Effects / Scenes**. The color tab will use LVGL's `lv_colorwheel` widget. The effects tab will show a scrollable list populated from `/json/eff`.

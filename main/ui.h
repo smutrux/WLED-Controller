@@ -26,6 +26,9 @@ void ui_set_color(uint32_t rgb);
 /** Sync power button state */
 void ui_set_power(bool on);
 
+/** Update the effect row label with the fx index (name lookup in stage 10) */
+void ui_set_effect(int fx_index);
+
 // ── WiFi status (called from wifi.c event handler) ───────────────────────────
 // wifi_conn_state_t is defined in wifi/wifi.h
 void ui_set_wifi_status(wifi_conn_state_t state);

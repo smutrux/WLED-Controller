@@ -19,4 +19,13 @@ menu "WLED Controller"
     # There is no compile-time WLED_HOST — this allows adding, removing,
     # and selecting devices from the controller UI without reflashing.
 
+    config WLED_POLL_INTERVAL_MS
+        int "WLED state poll interval (milliseconds)"
+        default 2000
+        range 500 30000
+        help
+            How often to GET /json/state from the current target device.
+            500 ms is the minimum safe value on a busy LAN.
+            Increase this to reduce network traffic if you have many devices.
+
 endmenu
