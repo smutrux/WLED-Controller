@@ -9,6 +9,7 @@ idf_component_register(
         "encoder/encoder_nav.c"
         "wifi/wifi.c"
         "devices/wled_devices.c"
+        "http/wled_http.c"
     INCLUDE_DIRS "."
     REQUIRES
         lvgl
@@ -21,4 +22,6 @@ idf_component_register(
         nvs_flash
         esp_event
         esp_netif
+        esp_http_client
+        spiffs
 )

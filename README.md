@@ -114,7 +114,7 @@ Decode signals from the encoder using the ESP32's **PCNT (Pulse Counter)** perip
 ### Stage 5 — WiFi ✅
 Connect to a WiFi network using `esp_wifi`. Implement automatic reconnection using the event loop (`WIFI_EVENT_STA_DISCONNECTED` → retry with exponential backoff). Display connection status on the UI header dot (grey → yellow connecting → green connected).
 
-### Stage 6 — Manual HTTP test
+### Stage 6 — Manual HTTP test ✅
 Use `esp_http_client` to perform a `GET /json/state` to a hardcoded WLED IP and log the response. Confirm the JSON response parses correctly. This stage validates network reachability before any UI is wired to it.
 
 ### Stage 7 — Button triggers HTTP

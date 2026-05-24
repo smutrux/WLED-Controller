@@ -22,6 +22,7 @@
 #include "encoder/encoder_nav.h"
 #include "wifi/wifi.h"
 #include "devices/wled_devices.h"
+#include "http/wled_http.h"
 
 static const char *TAG = "main";
 
@@ -77,10 +78,31 @@ static void lvgl_task(void *arg)
     }
 }
 
+// ── Stage 6 HTTP test task ────────────────────────────────────────────────────
+// Waits until WiFi is connected, then calls wled_http_test_all() once.
+// Remove this task (and its xTaskCreate call in app_main) when moving to stage 7.
+static void http_test_task(void *arg)
+{
+    ESP_LOGI(TAG, "HTTP test task: waiting for WiFi...");
+
+    // Poll until connected. wifi_get_state() is a volatile read — safe here.
+    while (wifi_get_state() != WIFI_STATE_CONNECTED) {
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+
+    // Brief pause — give the TCP/IP stack a moment to stabilise after
+    // the GOT_IP event before firing the first HTTP request.
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
+    wled_http_test_all();
+
+    vTaskDelete(NULL);  // task is done, clean up
+}
+
 // ── app_main ─────────────────────────────────────────────────────────────────
 void app_main(void)
 {
-    ESP_LOGI(TAG, "WLED Controller — Stage 1: Screen + UI");
+    ESP_LOGI(TAG, "WLED Controller — Stage 6: HTTP test");
     ESP_LOGI(TAG, "IDF version: %s", esp_get_idf_version());
 
     // ── Display ──────────────────────────────────────────────────────────────
@@ -178,24 +200,21 @@ void app_main(void)
     }
 
     // ── WLED device registry ──────────────────────────────────────────────────
-    // Loads any previously saved devices from NVS.  On first boot the list
-    // is empty and the seed block below populates it once.
+    // On first boot: reads spiffs_data/devices.cfg from the storage partition
+    // and persists to NVS.  On all subsequent boots: loads from NVS directly.
+    // To update devices without reflashing firmware:
+    //   1. Edit  spiffs_data/devices.cfg
+    //   2. Run   idf.py storage-flash
+    //   3. Erase NVS: idf.py -p COMx erase-region 0x9000 0x6000
     wled_devices_init();
-
-    if (wled_devices_count() == 0) {
-        // ── Seed your 6 WLED instances here (runs once, persisted to NVS) ────
-        // After the first boot these are loaded from NVS automatically.
-        // To change IPs later: call wled_devices_remove() + wled_devices_add(),
-        // or add a settings screen in the UI.
-        wled_devices_add("Tall",    "10.0.0.65");
-        wled_devices_add("Multi",   "10.0.0.126");
-        wled_devices_add("Shelf",   "10.0.0.139");
-            wled_devices_add("Closet",  "10.0.0.250");
-        ESP_LOGI(TAG, "Seeded %d WLED devices", wled_devices_count());
-    }
 
     // Default: broadcast to all devices
     wled_devices_set_selected(WLED_TARGET_ALL);
+
+    // ── Stage 6: HTTP reachability test task ─────────────────────────────────
+    // Runs once after WiFi connects, logs GET /json/state for each device.
+    // Delete this block when moving to stage 7.
+    xTaskCreatePinnedToCore(http_test_task, "http_test", 8192, NULL, 3, NULL, 0);
 
     // ── Start LVGL handler task ───────────────────────────────────────────────
     // Pinned to core 1; leave core 0 for WiFi/network tasks in later stages
