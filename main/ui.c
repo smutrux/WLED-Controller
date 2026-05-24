@@ -10,6 +10,7 @@
  */
 
 #include "ui.h"
+#include "cmd/wled_cmd.h"
 #include "board/board.h"
 #include "esp_log.h"
 #include "lvgl.h"
@@ -29,7 +30,7 @@ static lv_obj_t *s_wifi_dot = NULL;  // connection status dot in header
 // Simulated WLED state — replaced by real poll data in a later stage
 static bool    wled_on         = true;
 static uint8_t wled_brightness = 128;
-static uint32_t wled_color     = 0xFF6600;
+static uint32_t wled_color     = 0x0000FF;
 
 // ── Event handlers ───────────────────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ static void on_power_click(lv_event_t *e)
     lv_obj_set_style_bg_color(ui_power_btn,
         wled_on ? lv_palette_main(LV_PALETTE_ORANGE) : lv_color_hex(0x444444), 0);
     ESP_LOGI(TAG, "Power toggled -> %s", wled_on ? "ON" : "OFF");
-    // TODO Stage 7: POST /json/state {"on": true/false}
+    wled_cmd_set_power(wled_on);
 }
 
 static void on_brightness_change(lv_event_t *e)
@@ -48,8 +49,8 @@ static void on_brightness_change(lv_event_t *e)
     lv_obj_t *slider = lv_event_get_target(e);
     wled_brightness  = (uint8_t)lv_slider_get_value(slider);
     lv_label_set_text_fmt(ui_brightness_label, "%d", wled_brightness);
-    ESP_LOGI(TAG, "Brightness -> %d", wled_brightness);
-    // TODO Stage 8: debounced POST /json/state {"bri": wled_brightness}
+    ESP_LOGD(TAG, "Brightness -> %d", wled_brightness);
+    wled_cmd_set_brightness(wled_brightness);
 }
 
 static void on_color_tap(lv_event_t *e)
@@ -138,7 +139,7 @@ void ui_build(void)
     ui_brightness_slider = lv_slider_create(scr);
     lv_slider_set_range(ui_brightness_slider, 0, 255);
     lv_slider_set_value(ui_brightness_slider, wled_brightness, LV_ANIM_OFF);
-    lv_obj_set_size(ui_brightness_slider, LCD_H_RES - 80, 8);
+    lv_obj_set_size(ui_brightness_slider, LCD_H_RES - 90, 8);
     lv_obj_align(ui_brightness_slider, LV_ALIGN_TOP_LEFT, 12, 182);
     lv_obj_set_style_bg_color(ui_brightness_slider, lv_color_hex(0x333333), LV_PART_MAIN);
     lv_obj_set_style_bg_color(ui_brightness_slider,
@@ -247,12 +248,12 @@ void ui_set_wifi_status(wifi_conn_state_t state)
     lv_color_t color;
     switch (state) {
     case WIFI_STATE_CONNECTED:
-        // color = lv_palette_main(LV_PALETTE_GREEN);
-        color = lv_color_hex(0xAE3FE1);
+        color = lv_palette_main(LV_PALETTE_GREEN);
+        // color = lv_color_hex(0xAE3FE1);
         break;
         case WIFI_STATE_CONNECTING:
-        // color = lv_palette_main(LV_PALETTE_YELLOW);
-        color = lv_color_hex(0x001AF4);
+        color = lv_palette_main(LV_PALETTE_YELLOW);
+        // color = lv_color_hex(0x001AF4);
         break;
     case WIFI_STATE_DISCONNECTED:
     default:
