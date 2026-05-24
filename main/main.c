@@ -1,5 +1,5 @@
 /**
- * main.c — WLED Controller: Stage 1
+ * main.c — WLED Controller: Stage 7
  *
  * ESP-IDF 5.x entry point.
  * Initializes display, touch, LVGL, and builds the initial UI.
@@ -23,6 +23,7 @@
 #include "wifi/wifi.h"
 #include "devices/wled_devices.h"
 #include "http/wled_http.h"
+#include "cmd/wled_cmd.h"
 
 static const char *TAG = "main";
 
@@ -78,31 +79,10 @@ static void lvgl_task(void *arg)
     }
 }
 
-// ── Stage 6 HTTP test task ────────────────────────────────────────────────────
-// Waits until WiFi is connected, then calls wled_http_test_all() once.
-// Remove this task (and its xTaskCreate call in app_main) when moving to stage 7.
-static void http_test_task(void *arg)
-{
-    ESP_LOGI(TAG, "HTTP test task: waiting for WiFi...");
-
-    // Poll until connected. wifi_get_state() is a volatile read — safe here.
-    while (wifi_get_state() != WIFI_STATE_CONNECTED) {
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-
-    // Brief pause — give the TCP/IP stack a moment to stabilise after
-    // the GOT_IP event before firing the first HTTP request.
-    vTaskDelay(pdMS_TO_TICKS(1000));
-
-    wled_http_test_all();
-
-    vTaskDelete(NULL);  // task is done, clean up
-}
-
 // ── app_main ─────────────────────────────────────────────────────────────────
 void app_main(void)
 {
-    ESP_LOGI(TAG, "WLED Controller — Stage 6: HTTP test");
+    ESP_LOGI(TAG, "WLED Controller — Stage 7: Button + slider HTTP");
     ESP_LOGI(TAG, "IDF version: %s", esp_get_idf_version());
 
     // ── Display ──────────────────────────────────────────────────────────────
@@ -211,10 +191,13 @@ void app_main(void)
     // Default: broadcast to all devices
     wled_devices_set_selected(WLED_TARGET_ALL);
 
-    // ── Stage 6: HTTP reachability test task ─────────────────────────────────
-    // Runs once after WiFi connects, logs GET /json/state for each device.
-    // Delete this block when moving to stage 7.
-    xTaskCreatePinnedToCore(http_test_task, "http_test", 8192, NULL, 3, NULL, 0);
+    // ── Command layer ─────────────────────────────────────────────────────────
+    // Owns the brightness debounce timer and the wled_cmd_task (core 0).
+    // Must be called after wifi_init() but before any UI events can fire.
+    esp_err_t cmd_err = wled_cmd_init();
+    if (cmd_err != ESP_OK) {
+        ESP_LOGW(TAG, "Command layer init failed (0x%x)", cmd_err);
+    }
 
     // ── Start LVGL handler task ───────────────────────────────────────────────
     // Pinned to core 1; leave core 0 for WiFi/network tasks in later stages

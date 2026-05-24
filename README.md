@@ -117,10 +117,10 @@ Connect to a WiFi network using `esp_wifi`. Implement automatic reconnection usi
 ### Stage 6 — Manual HTTP test ✅
 Use `esp_http_client` to perform a `GET /json/state` to a hardcoded WLED IP and log the response. Confirm the JSON response parses correctly. This stage validates network reachability before any UI is wired to it.
 
-### Stage 7 — Button triggers HTTP
+### Stage 7 — Button triggers HTTP ✅
 Wire the power button and brightness slider in the UI to `POST /json/state` with the appropriate JSON payload. Implement software debounce on the encoder button using a one-shot `esp_timer`.
 
-### Stage 8 — Encoder controls brightness
+### Stage 8 — Encoder controls brightness ✅
 Translate PCNT count deltas into brightness POST requests. Debounce rapid turns with a short timer so that spinning quickly sends one request at the end of the motion rather than dozens during it.
 
 ### Stage 9 — Poll WLED state

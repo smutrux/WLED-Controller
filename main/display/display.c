@@ -154,7 +154,7 @@ esp_err_t display_init(void)
     // reset_gpio_num = -1 because we did the reset manually via TCA9554 above
     esp_lcd_panel_dev_config_t panel_cfg = {
         .reset_gpio_num = -1,
-        .rgb_ele_order  = LCD_RGB_ELEMENT_ORDER_BGR,
+        .rgb_ele_order  = LCD_RGB_ELEMENT_ORDER_RGB,
         .bits_per_pixel = LCD_BIT_DEPTH,
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_st7796(io_handle, &panel_cfg, &s_panel));
@@ -166,7 +166,7 @@ esp_err_t display_init(void)
     // Portrait orientation — adjust mirror flags if image is flipped
     ESP_ERROR_CHECK(esp_lcd_panel_swap_xy(s_panel, false));
     ESP_ERROR_CHECK(esp_lcd_panel_mirror(s_panel, true, false));
-    ESP_ERROR_CHECK(esp_lcd_panel_invert_color(s_panel, false));
+    ESP_ERROR_CHECK(esp_lcd_panel_invert_color(s_panel, true));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(s_panel, true));
 
     // ── Backlight ────────────────────────────────────────────────────────────

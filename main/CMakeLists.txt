@@ -10,6 +10,7 @@ idf_component_register(
         "wifi/wifi.c"
         "devices/wled_devices.c"
         "http/wled_http.c"
+        "cmd/wled_cmd.c"
     INCLUDE_DIRS "."
     REQUIRES
         lvgl
