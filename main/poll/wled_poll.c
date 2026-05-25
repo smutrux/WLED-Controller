@@ -188,7 +188,7 @@ static void poll_task(void *arg)
             push_to_ui(&state);
 
             // Update the status card with preset name, colour, brightness
-            const char *preset_name = "—";
+            const char *preset_name = "No Preset Loaded";
             int pidx = wled_presets_find_by_id(state.ps);
             if (pidx >= 0) {
                 const wled_preset_t *p = wled_presets_get(pidx);
@@ -197,8 +197,8 @@ static void poll_task(void *arg)
             char line1[48], line2[48];
             snprintf(line1, sizeof(line1), "%s  |  %s",
                      state.on ? "ON" : "OFF", preset_name);
-            snprintf(line2, sizeof(line2), "Bri: %-3d  #%02X%02X%02X",
-                     state.bri, state.r, state.g, state.b);
+            snprintf(line2, sizeof(line2), "Bri: %-3.0f%%  #%02X%02X%02X",
+                     state.bri/2.55, state.r, state.g, state.b);
             lvgl_lock();
             ui_set_status(line1, line2);
             lvgl_unlock();

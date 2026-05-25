@@ -65,7 +65,7 @@ esp_err_t wled_presets_fetch(const char *ip)
     if (!ip) return ESP_ERR_INVALID_ARG;
 
     char url[80];
-    snprintf(url, sizeof(url), "http://%s/json/presets", ip);
+    snprintf(url, sizeof(url), "http://%s/presets.json", ip);
 
     static char resp[PRESET_BUF_SIZE];
     resp[0] = '\0';
@@ -89,7 +89,7 @@ esp_err_t wled_presets_fetch(const char *ip)
     esp_http_client_cleanup(client);
 
     if (ret != ESP_OK || status != 200) {
-        ESP_LOGW(TAG, "[%s] /json/presets failed (ret=0x%x status=%d)", ip, ret, status);
+        ESP_LOGW(TAG, "[%s] /presets.json failed (ret=0x%x status=%d)", ip, ret, status);
         return ESP_FAIL;
     }
 

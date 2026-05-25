@@ -236,7 +236,7 @@ void app_main(void)
     }
 
     // ── Preset fetch task ─────────────────────────────────────────────────────
-    xTaskCreatePinnedToCore(preset_fetch_task, "preset_fetch", 6144, NULL, 2, NULL, 0);
+    xTaskCreatePinnedToCore(preset_fetch_task, "preset_fetch", 12288, NULL, 2, NULL, 0);
 
     // ── Start LVGL handler task ───────────────────────────────────────────────
     // Pinned to core 1; leave core 0 for WiFi/network tasks in later stages
