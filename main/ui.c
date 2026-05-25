@@ -64,6 +64,17 @@ static bool      s_picker_open     = false;
 
 static picker_target_t s_picker_focus = PICKER_TARGET_WHEEL;
 
+static lv_obj_t *picker_target_obj(picker_target_t t)
+{
+    switch (t) {
+    case PICKER_TARGET_WHEEL:  return s_colorwheel;
+    case PICKER_TARGET_SAT:    return s_sat_slider;
+    case PICKER_TARGET_APPLY:  return s_apply_btn;
+    case PICKER_TARGET_CANCEL: return s_cancel_btn;
+    default:                   return NULL;
+    }
+}
+
 // Expose picker state to encoder_nav
 bool      ui_color_picker_is_open(void)   { return s_picker_open; }
 lv_obj_t *ui_color_picker_wheel(void)     { return s_colorwheel; }
@@ -81,6 +92,18 @@ void ui_color_picker_set_focus(picker_target_t t)
 static bool     wled_on         = true;
 static uint8_t  wled_brightness = 128;
 static uint32_t wled_color      = 0x1565C0;
+
+static int brightness_to_percent(uint8_t bri)
+{
+    return ((int)bri * 100 + 127) / 255;
+}
+
+static void update_brightness_label(void)
+{
+    if (ui_brightness_label)
+        lv_label_set_text_fmt(ui_brightness_label, "%d%%",
+                              brightness_to_percent(wled_brightness));
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 static uint32_t lv_color_to_u32(lv_color_t c)
@@ -111,14 +134,16 @@ static void update_preview_new(void)
 }
 
 // Apply a focus highlight to a picker widget
-static void picker_set_highlight(lv_obj_t *w, bool on)
+static void picker_set_highlight(lv_obj_t *w, bool on, bool editing)
 {
     if (!w) return;
     lv_color_t c = lv_palette_main(LV_PALETTE_LIGHT_BLUE);
     lv_obj_set_style_outline_color(w, c, 0);
-    lv_obj_set_style_outline_width(w, on ? 2 : 0, 0);
-    lv_obj_set_style_outline_pad(w, 3, 0);
+    lv_obj_set_style_outline_width(w, on ? (editing ? 4 : 2) : 0, 0);
+    lv_obj_set_style_outline_pad(w, editing ? 4 : 3, 0);
     lv_obj_set_style_outline_opa(w, on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+    if (lv_obj_check_type(w, &lv_slider_class))
+        lv_obj_set_style_pad_all(w, editing ? 12 : 8, LV_PART_KNOB);
 }
 
 // ── Color picker modal ────────────────────────────────────────────────────────
@@ -258,7 +283,7 @@ static void open_color_picker(void)
     lv_obj_center(cancel_lbl);
 
     // Initial highlight on the colorwheel
-    picker_set_highlight(s_colorwheel, true);
+    picker_set_highlight(s_colorwheel, true, false);
 }
 
 // ── Event handlers ────────────────────────────────────────────────────────────
@@ -281,7 +306,7 @@ static void on_brightness_label_update(lv_event_t *e)
 {
     lv_obj_t *slider = lv_event_get_target(e);
     wled_brightness  = (uint8_t)lv_slider_get_value(slider);
-    lv_label_set_text_fmt(ui_brightness_label, "%.0f", wled_brightness/2.55);
+    update_brightness_label();
 }
 
 static void on_brightness_released(lv_event_t *e)
@@ -381,7 +406,7 @@ void ui_build(void)
     ui_brightness_slider = lv_slider_create(scr);
     lv_slider_set_range(ui_brightness_slider, 0, 255);
     lv_slider_set_value(ui_brightness_slider, wled_brightness, LV_ANIM_OFF);
-    lv_obj_set_size(ui_brightness_slider, LCD_H_RES - 80, 8);
+    lv_obj_set_size(ui_brightness_slider, LCD_H_RES - 100, 8);
     lv_obj_align(ui_brightness_slider, LV_ALIGN_TOP_LEFT, 14, 168);
     lv_obj_set_style_bg_color(ui_brightness_slider, lv_color_hex(0x2A2A3E), LV_PART_MAIN);
     lv_obj_set_style_bg_color(ui_brightness_slider, lv_color_hex(COL_ACCENT2), LV_PART_INDICATOR);
@@ -396,11 +421,14 @@ void ui_build(void)
                         LV_EVENT_RELEASED, NULL);
 
     ui_brightness_label = lv_label_create(scr);
+    lv_obj_set_width(ui_brightness_label, 58);
+    lv_label_set_long_mode(ui_brightness_label, LV_LABEL_LONG_CLIP);
     lv_obj_set_style_text_font(ui_brightness_label, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(ui_brightness_label, lv_color_hex(COL_ACCENT2), 0);
+    lv_obj_set_style_text_align(ui_brightness_label, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_align_to(ui_brightness_label, ui_brightness_slider,
-                    LV_ALIGN_OUT_RIGHT_MID, 20, 0);
-    lv_label_set_text_fmt(ui_brightness_label, "%.0f", wled_brightness/2.55);
+                    LV_ALIGN_OUT_RIGHT_MID, 12, 0);
+    update_brightness_label();
 
     // ── Color preview ─────────────────────────────────────────────────────────
     lv_obj_t *col_heading = lv_label_create(scr);
@@ -473,8 +501,7 @@ void ui_set_brightness(uint8_t bri)
     wled_brightness = bri;
     if (ui_brightness_slider)
         lv_slider_set_value(ui_brightness_slider, bri, LV_ANIM_ON);
-    if (ui_brightness_label)
-        lv_label_set_text_fmt(ui_brightness_label, "%.0f", bri/2.55);
+    update_brightness_label();
 }
 
 void ui_set_color(uint32_t rgb)
@@ -539,17 +566,18 @@ void ui_brightness_send_current(void)
 void ui_picker_set_highlight(picker_target_t t)
 {
     // Clear all highlights first
-    picker_set_highlight(s_colorwheel,  false);
-    picker_set_highlight(s_sat_slider,  false);
-    picker_set_highlight(s_apply_btn,   false);
-    picker_set_highlight(s_cancel_btn,  false);
+    for (int i = 0; i < PICKER_TARGET_COUNT; i++)
+        picker_set_highlight(picker_target_obj((picker_target_t)i), false, false);
 
-    // Apply to the new target
-    lv_obj_t *targets[PICKER_TARGET_COUNT] = {
-        s_colorwheel, s_sat_slider, s_apply_btn, s_cancel_btn
-    };
-    if (t < PICKER_TARGET_COUNT && targets[t]) {
-        picker_set_highlight(targets[t], true);
-    }
+    lv_obj_t *target = picker_target_obj(t);
+    if (target)
+        picker_set_highlight(target, true, false);
     s_picker_focus = t;
+}
+
+void ui_picker_set_editing(picker_target_t t, bool editing)
+{
+    lv_obj_t *target = picker_target_obj(t);
+    if (target)
+        picker_set_highlight(target, true, editing);
 }

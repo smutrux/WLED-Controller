@@ -5,9 +5,9 @@
  *   NAV_MODE_NAVIGATE      CW/CCW cycles focus; press activates target
  *   NAV_MODE_EDIT          CW/CCW adjusts slider with velocity scaling;
  *                          press exits and sends HTTP (deferred brightness)
- *   NAV_MODE_COLOR_PICKER  CW/CCW adjusts the currently focused picker element;
- *                          press cycles to the next element (wheel→sat→apply→cancel)
- *                          pressing on Apply/Cancel closes the modal
+ *   NAV_MODE_COLOR_PICKER  CW/CCW cycles picker focus; press selects target
+ *   NAV_MODE_COLOR_EDIT    CW/CCW adjusts wheel/saturation; press exits edit
+ *   NAV_MODE_DROPDOWN      CW/CCW changes preset selection; press accepts it
  *
  * Velocity scaling:
  *   Gap between events < 80 ms  → step 8
@@ -43,6 +43,7 @@ typedef enum {
     TARGET_TYPE_BUTTON,
     TARGET_TYPE_SLIDER,
     TARGET_TYPE_ACTION,
+    TARGET_TYPE_DROPDOWN,
 } target_type_t;
 
 typedef struct {
@@ -55,7 +56,7 @@ static const nav_target_t k_targets[TARGET_COUNT] = {
     [TARGET_POWER]      = { &ui_power_btn,         TARGET_TYPE_BUTTON, "Power"      },
     [TARGET_BRIGHTNESS] = { &ui_brightness_slider,  TARGET_TYPE_SLIDER, "Brightness" },
     [TARGET_COLOR]      = { &ui_color_preview,      TARGET_TYPE_ACTION, "Color"      },
-    [TARGET_PRESET]     = { &ui_preset_dropdown,    TARGET_TYPE_ACTION, "Preset"     },
+    [TARGET_PRESET]     = { &ui_preset_dropdown,    TARGET_TYPE_DROPDOWN, "Preset"   },
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -63,11 +64,14 @@ typedef enum {
     NAV_MODE_NAVIGATE,
     NAV_MODE_EDIT,
     NAV_MODE_COLOR_PICKER,
+    NAV_MODE_COLOR_EDIT,
+    NAV_MODE_DROPDOWN,
 } nav_mode_t;
 
 static int        s_focus_idx   = -1;
 static nav_mode_t s_mode        = NAV_MODE_NAVIGATE;
 static int64_t    s_last_rot_us = 0;
+static uint16_t   s_dropdown_open_sel = 0;
 
 // ── Velocity ──────────────────────────────────────────────────────────────────
 static int velocity_step(void)
@@ -159,14 +163,62 @@ static void activate_focused(void)
             // Highlight defaults to WHEEL (set inside open_color_picker already)
         }
         break;
+
+    case TARGET_TYPE_DROPDOWN:
+        s_dropdown_open_sel = lv_dropdown_get_selected(widget);
+        lv_dropdown_open(widget);
+        s_mode = NAV_MODE_DROPDOWN;
+        apply_focus_style(widget, true);
+        wled_poll_set_paused(true);   // prevent poll from resetting the selection
+        break;
     }
 }
 
-// ── Color picker sub-navigation ───────────────────────────────────────────────
-// Rotating adjusts the currently focused picker element.
-// Pressing cycles to the next element; pressing on Apply/Cancel closes modal.
+static void preset_rotate(int dir)
+{
+    lv_obj_t *dd = ui_preset_dropdown;
+    if (!dd) return;
 
-static void picker_rotate(int dir)
+    uint16_t count = lv_dropdown_get_option_cnt(dd);
+    if (count == 0) return;
+
+    int next = (int)lv_dropdown_get_selected(dd) + dir;
+    if (next < 0) next = count - 1;
+    if (next >= count) next = 0;
+    lv_dropdown_set_selected(dd, (uint16_t)next);
+}
+
+static void preset_press(void)
+{
+    lv_obj_t *dd = ui_preset_dropdown;
+    if (!dd) {
+        s_mode = NAV_MODE_NAVIGATE;
+        return;
+    }
+
+    bool changed = lv_dropdown_get_selected(dd) != s_dropdown_open_sel;
+    if (lv_dropdown_is_open(dd))
+        lv_dropdown_close(dd);
+
+    s_mode = NAV_MODE_NAVIGATE;
+    apply_focus_style(dd, false);
+    wled_poll_set_paused(false);   // re-enable poll now selection is confirmed
+
+    if (changed)
+        lv_event_send(dd, LV_EVENT_VALUE_CHANGED, NULL);
+}
+
+// ── Color picker sub-navigation ───────────────────────────────────────────────
+// Rotating traverses picker tab stops. Pressing selects the focused item.
+
+static void picker_focus_move(int dir)
+{
+    picker_target_t focus = ui_color_picker_focus();
+    int next = ((int)focus + dir + PICKER_TARGET_COUNT) % PICKER_TARGET_COUNT;
+    ui_picker_set_highlight((picker_target_t)next);
+}
+
+static void picker_adjust(int dir)
 {
     picker_target_t focus = ui_color_picker_focus();
 
@@ -199,18 +251,22 @@ static void picker_rotate(int dir)
     }
     case PICKER_TARGET_APPLY:
     case PICKER_TARGET_CANCEL:
-        // No rotation action on buttons — encoder navigates between them via press
         break;
     default:
         break;
     }
 }
 
-static void picker_press(void)
+static void picker_select(void)
 {
     picker_target_t focus = ui_color_picker_focus();
 
     switch (focus) {
+    case PICKER_TARGET_WHEEL:
+    case PICKER_TARGET_SAT:
+        s_mode = NAV_MODE_COLOR_EDIT;
+        ui_picker_set_editing(focus, true);
+        return;
     case PICKER_TARGET_APPLY:
         ui_color_picker_close_apply();
         s_mode = NAV_MODE_NAVIGATE;
@@ -222,11 +278,13 @@ static void picker_press(void)
     default:
         break;
     }
+}
 
-    // Advance focus to next element in the picker
-    picker_target_t next = (picker_target_t)((focus + 1) % PICKER_TARGET_COUNT);
-    ui_picker_set_highlight(next);
-    ui_color_picker_set_focus(next);
+static void picker_exit_edit(void)
+{
+    picker_target_t focus = ui_color_picker_focus();
+    ui_picker_set_editing(focus, false);
+    s_mode = NAV_MODE_COLOR_PICKER;
 }
 
 // ── Main event callback ───────────────────────────────────────────────────────
@@ -234,18 +292,43 @@ static void on_encoder_event(encoder_event_t event, void *ctx)
 {
     lvgl_lock();
 
+    if (ui_color_picker_is_open() &&
+        s_mode != NAV_MODE_COLOR_PICKER &&
+        s_mode != NAV_MODE_COLOR_EDIT) {
+        s_mode = NAV_MODE_COLOR_PICKER;
+        ui_picker_set_highlight(ui_color_picker_focus());
+    }
+
     // Detect if picker was closed externally (touch Cancel)
-    if (s_mode == NAV_MODE_COLOR_PICKER && !ui_color_picker_is_open()) {
+    if ((s_mode == NAV_MODE_COLOR_PICKER || s_mode == NAV_MODE_COLOR_EDIT) &&
+        !ui_color_picker_is_open()) {
         s_mode = NAV_MODE_NAVIGATE;
+        // Restore the main-screen focus highlight so the user can see where
+        // the encoder is and doesn't accidentally re-open the picker on next press
+        lv_obj_t *fw = focused_widget();
+        if (fw) apply_focus_style(fw, false);
+    }
+
+    // Detect if the dropdown was closed externally.
+    if (s_mode == NAV_MODE_DROPDOWN &&
+        (!ui_preset_dropdown || !lv_dropdown_is_open(ui_preset_dropdown))) {
+        s_mode = NAV_MODE_NAVIGATE;
+        wled_poll_set_paused(false);
+        if (ui_preset_dropdown)
+            apply_focus_style(ui_preset_dropdown, false);
     }
 
     switch (event) {
     case ENCODER_EVENT_CW:
         if (s_mode == NAV_MODE_COLOR_PICKER) {
-            picker_rotate(+1);
+            picker_focus_move(+1);
+        } else if (s_mode == NAV_MODE_COLOR_EDIT) {
+            picker_adjust(+1);
+        } else if (s_mode == NAV_MODE_DROPDOWN) {
+            preset_rotate(+1);
         } else if (s_focus_idx < 0 || s_mode == NAV_MODE_NAVIGATE) {
             cycle_focus(+1);
-        } else {
+        } else if (s_mode == NAV_MODE_EDIT) {
             // Edit mode — velocity-scaled slider
             lv_obj_t *w = focused_widget();
             if (w && k_targets[s_focus_idx].type == TARGET_TYPE_SLIDER) {
@@ -261,10 +344,14 @@ static void on_encoder_event(encoder_event_t event, void *ctx)
 
     case ENCODER_EVENT_CCW:
         if (s_mode == NAV_MODE_COLOR_PICKER) {
-            picker_rotate(-1);
+            picker_focus_move(-1);
+        } else if (s_mode == NAV_MODE_COLOR_EDIT) {
+            picker_adjust(-1);
+        } else if (s_mode == NAV_MODE_DROPDOWN) {
+            preset_rotate(-1);
         } else if (s_focus_idx < 0 || s_mode == NAV_MODE_NAVIGATE) {
             cycle_focus(-1);
-        } else {
+        } else if (s_mode == NAV_MODE_EDIT) {
             lv_obj_t *w = focused_widget();
             if (w && k_targets[s_focus_idx].type == TARGET_TYPE_SLIDER) {
                 int step = velocity_step();
@@ -279,7 +366,11 @@ static void on_encoder_event(encoder_event_t event, void *ctx)
 
     case ENCODER_EVENT_PRESS:
         if (s_mode == NAV_MODE_COLOR_PICKER) {
-            picker_press();
+            picker_select();
+        } else if (s_mode == NAV_MODE_COLOR_EDIT) {
+            picker_exit_edit();
+        } else if (s_mode == NAV_MODE_DROPDOWN) {
+            preset_press();
         } else {
             activate_focused();
         }

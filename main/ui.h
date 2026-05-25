@@ -55,6 +55,7 @@ void             ui_color_picker_close_cancel(void);
 
 // Move picker focus highlight; called from encoder_nav
 void ui_picker_set_highlight(picker_target_t t);
+void ui_picker_set_editing(picker_target_t t, bool editing);
 
 // ── LVGL thread-safety ────────────────────────────────────────────────────────
 void lvgl_lock(void);
