@@ -126,7 +126,7 @@ Translate PCNT count deltas into brightness POST requests. Debounce rapid turns 
 ### Stage 9 — Poll WLED state ✅
 Spawn a task on core 0 that `GET /json/state`s every 0.5 - 30 seconds (configure in `idf.py menuconfig`). Parse the JSON response (brightness, color, on/off, effect name) and push updates to the UI via `lvgl_lock()`. This makes the controller a true two-way interface: changes from the WLED web app or automations appear on the controller without any user action.
 
-### Stage 10 — Final UI
+### Stage 10 — Final UI ✅
 Redesign the UI layout now that all data flows are working. Likely a tabview: **Brightness / Color / Effects / Scenes**. The color tab will use LVGL's `lv_colorwheel` widget. The effects tab will show a scrollable list populated from `/json/eff`.
 
 ### Stage 11 — Power system

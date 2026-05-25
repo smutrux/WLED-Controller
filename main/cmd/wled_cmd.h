@@ -47,6 +47,18 @@ void wled_cmd_set_power(bool on);
  */
 void wled_cmd_set_brightness(uint8_t bri);
 
+/**
+ * Send a colour command (RGB 0x00RRGGBB) immediately (no debounce).
+ * Safe to call from any task context.
+ */
+void wled_cmd_set_color(uint32_t rgb);
+
+/**
+ * Apply a WLED preset by its WLED ID (not display index).
+ * Sends immediately — no debounce.
+ */
+void wled_cmd_apply_preset(int preset_id);
+
 #ifdef __cplusplus
 }
 #endif
