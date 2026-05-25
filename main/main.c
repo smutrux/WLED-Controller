@@ -25,6 +25,7 @@
 #include "http/wled_http.h"
 #include "cmd/wled_cmd.h"
 #include "poll/wled_poll.h"
+#include "presets/wled_presets.h"
 
 static const char *TAG = "main";
 
@@ -80,10 +81,36 @@ static void lvgl_task(void *arg)
     }
 }
 
+
+// ── Preset fetch task ─────────────────────────────────────────────────────────
+// Waits for WiFi, fetches /json/presets from device 0, populates the dropdown.
+// Runs once then deletes itself.
+static void preset_fetch_task(void *arg)
+{
+    // Wait for WiFi
+    while (wifi_get_state() != WIFI_STATE_CONNECTED) {
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+    vTaskDelay(pdMS_TO_TICKS(1500));  // let poll task run first
+
+    const wled_device_t *dev = wled_devices_get(0);
+    if (dev) {
+        esp_err_t ret = wled_presets_fetch(dev->ip);
+        if (ret == ESP_OK) {
+            lvgl_lock();
+            ui_presets_loaded();
+            lvgl_unlock();
+        } else {
+            ESP_LOGW("preset", "Failed to load presets from %s", dev->ip);
+        }
+    }
+    vTaskDelete(NULL);
+}
+
 // ── app_main ─────────────────────────────────────────────────────────────────
 void app_main(void)
 {
-    ESP_LOGI(TAG, "WLED Controller — Stage 9: State polling");
+    ESP_LOGI(TAG, "WLED Controller — Stage 10: Final UI");
     ESP_LOGI(TAG, "IDF version: %s", esp_get_idf_version());
 
     // ── Display ──────────────────────────────────────────────────────────────
@@ -207,6 +234,9 @@ void app_main(void)
     if (poll_err != ESP_OK) {
         ESP_LOGW(TAG, "Poll init failed (0x%x)", poll_err);
     }
+
+    // ── Preset fetch task ─────────────────────────────────────────────────────
+    xTaskCreatePinnedToCore(preset_fetch_task, "preset_fetch", 6144, NULL, 2, NULL, 0);
 
     // ── Start LVGL handler task ───────────────────────────────────────────────
     // Pinned to core 1; leave core 0 for WiFi/network tasks in later stages

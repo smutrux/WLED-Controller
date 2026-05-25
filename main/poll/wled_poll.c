@@ -17,6 +17,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "cJSON.h"
+#include "presets/wled_presets.h"
 #include <string.h>
 
 static const char *TAG = "wled_poll";
@@ -40,6 +41,7 @@ typedef struct {
     uint8_t  bri;
     uint8_t  r, g, b;      // seg[0].col[0]
     int      fx;           // effect index
+    int      ps;           // active preset id (-1 if none)
     bool     valid;        // false if parsing failed
 } wled_state_t;
 
@@ -69,6 +71,13 @@ static wled_state_t parse_state(const char *json)
     // Default colour/fx in case segment parsing fails
     result.r = 255; result.g = 102; result.b = 0;
     result.fx = 0;
+    result.ps = -1;
+
+    // Top-level preset id
+    cJSON *ps_item = cJSON_GetObjectItem(root, "ps");
+    if (cJSON_IsNumber(ps_item)) {
+        result.ps = ps_item->valueint;
+    }
 
     // seg[0] → col[0] → [R, G, B], fx
     cJSON *seg_arr = cJSON_GetObjectItem(root, "seg");
@@ -104,11 +113,14 @@ static void push_to_ui(const wled_state_t *s)
 {
     uint32_t rgb = ((uint32_t)s->r << 16) | ((uint32_t)s->g << 8) | s->b;
 
+    // Find display index for the active preset (-1 if not in list)
+    int preset_idx = wled_presets_find_by_id(s->ps);
+
     lvgl_lock();
     ui_set_power(s->on);
     ui_set_brightness(s->bri);
     ui_set_color(rgb);
-    ui_set_effect(s->fx);
+    ui_set_preset(preset_idx, s->ps);
     lvgl_unlock();
 }
 
@@ -175,12 +187,20 @@ static void poll_task(void *arg)
         if (!hold) {
             push_to_ui(&state);
 
-            // Update the status card with live data
-            char status_line[48];
-            snprintf(status_line, sizeof(status_line),
-                     "Status: %s  bri=%d", state.on ? "ON" : "OFF", state.bri);
+            // Update the status card with preset name, colour, brightness
+            const char *preset_name = "—";
+            int pidx = wled_presets_find_by_id(state.ps);
+            if (pidx >= 0) {
+                const wled_preset_t *p = wled_presets_get(pidx);
+                if (p) preset_name = p->name;
+            }
+            char line1[48], line2[48];
+            snprintf(line1, sizeof(line1), "%s  |  %s",
+                     state.on ? "ON" : "OFF", preset_name);
+            snprintf(line2, sizeof(line2), "Bri: %-3d  #%02X%02X%02X",
+                     state.bri, state.r, state.g, state.b);
             lvgl_lock();
-            ui_set_status(status_line, dev->name);
+            ui_set_status(line1, line2);
             lvgl_unlock();
         } else {
             ESP_LOGD(TAG, "In command hold window, skipping UI update");

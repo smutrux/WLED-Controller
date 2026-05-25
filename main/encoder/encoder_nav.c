@@ -28,7 +28,8 @@ static const char *TAG = "enc_nav";
 typedef enum {
     TARGET_POWER = 0,
     TARGET_BRIGHTNESS,
-    TARGET_COLOR,        // placeholder — invokes on_color_tap when pressed
+    TARGET_COLOR,
+    TARGET_PRESET,
     TARGET_COUNT
 } target_id_t;
 
@@ -48,6 +49,7 @@ static const nav_target_t k_targets[TARGET_COUNT] = {
     [TARGET_POWER]      = { &ui_power_btn,         TARGET_TYPE_BUTTON, "Power"      },
     [TARGET_BRIGHTNESS] = { &ui_brightness_slider,  TARGET_TYPE_SLIDER, "Brightness" },
     [TARGET_COLOR]      = { &ui_color_preview,      TARGET_TYPE_ACTION, "Color"      },
+    [TARGET_PRESET]     = { &ui_preset_dropdown,    TARGET_TYPE_ACTION, "Preset"     },
 };
 
 // ── Navigation state ──────────────────────────────────────────────────────────
@@ -67,8 +69,8 @@ static nav_mode_t  s_mode      = NAV_MODE_NAVIGATE;
 static void apply_focus_style(lv_obj_t *widget, bool is_edit)
 {
     lv_color_t color = is_edit
-        ? lv_palette_main(LV_PALETTE_CYAN)
-        : lv_palette_main(LV_PALETTE_ORANGE);
+        ? lv_palette_main(LV_PALETTE_LIGHT_BLUE)
+        : lv_palette_main(LV_PALETTE_BLUE);
 
     lv_obj_set_style_outline_color(widget, color, 0);
     lv_obj_set_style_outline_width(widget, 2, 0);

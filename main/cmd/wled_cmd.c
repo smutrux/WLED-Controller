@@ -1,24 +1,5 @@
 /**
  * wled_cmd.c — WLED command dispatch layer
- *
- * Threading model:
- *   UI callbacks (LVGL task, core 1) or encoder callbacks (core 0) call
- *   wled_cmd_set_power() / wled_cmd_set_brightness().
- *
- *   These functions write to a small shared state struct (guarded by a
- *   spinlock) and notify a dedicated wled_cmd_task via a FreeRTOS task
- *   notification.  The cmd_task (core 0) then calls wled_http_broadcast_post()
- *   which blocks on the network — completely off the LVGL render path.
- *
- *   Brightness debounce:
- *     wled_cmd_set_brightness() restarts a one-shot esp_timer each call.
- *     The timer callback sends the task notification after the gesture ends.
- *     Power commands bypass the timer and notify directly.
- *
- *   Why a separate task instead of calling HTTP from the esp_timer callback?
- *     esp_timer callbacks run on a shared task and must not block.
- *     HTTP calls block for up to HTTP_TIMEOUT_MS.  Doing HTTP in the timer
- *     callback would stall all other timers including the LVGL tick.
  */
 
 #include "cmd/wled_cmd.h"
@@ -28,47 +9,41 @@
 #include "esp_check.h"
 #include "esp_timer.h"
 #include <stdbool.h>
+#include <string.h>
+#include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
-#include <string.h>
-#include <stdio.h>
 
 static const char *TAG = "wled_cmd";
 
-// ── Tuning ────────────────────────────────────────────────────────────────────
-// How long to wait after the last brightness change before sending the POST.
-// 200 ms feels instant to a human but collapses dozens of slider events into one.
 #define WLED_CMD_BRIGHTNESS_DEBOUNCE_MS  200
 
-// ── Command types ─────────────────────────────────────────────────────────────
 typedef enum {
     CMD_POWER      = (1 << 0),
     CMD_BRIGHTNESS = (1 << 1),
+    CMD_COLOR      = (1 << 2),
+    CMD_PRESET     = (1 << 3),
 } cmd_flag_t;
 
-// ── Shared state (protected by s_lock) ────────────────────────────────────────
-static portMUX_TYPE      s_lock      = portMUX_INITIALIZER_UNLOCKED;
-static volatile uint32_t s_pending   = 0;     // bitmask of cmd_flag_t
-static volatile bool     s_power     = true;
-static volatile uint8_t  s_brightness = 128;
+// ── Shared state ──────────────────────────────────────────────────────────────
+static portMUX_TYPE      s_lock        = portMUX_INITIALIZER_UNLOCKED;
+static volatile uint32_t s_pending     = 0;
+static volatile bool     s_power       = true;
+static volatile uint8_t  s_brightness  = 128;
+static volatile uint32_t s_color       = 0xFF6600;
+static volatile int      s_preset_id   = -1;
 
-// ── Last-sent timestamp (microseconds, from esp_timer_get_time) ──────────────
-static volatile int64_t s_last_sent_us = 0;
-
-// ── Task handle for notifications ─────────────────────────────────────────────
-static TaskHandle_t s_cmd_task_handle = NULL;
+static volatile int64_t  s_last_sent_us = 0;
+static TaskHandle_t      s_cmd_task_handle = NULL;
+static esp_timer_handle_t s_bri_timer;
 
 // ── Debounce timer ────────────────────────────────────────────────────────────
-static esp_timer_handle_t s_bri_timer;
 
 static void bri_debounce_expired(void *arg)
 {
-    // Timer fired — brightness gesture is done, notify the cmd task.
-    // Do NOT call HTTP here: esp_timer callbacks must not block.
     if (s_cmd_task_handle) {
-        xTaskNotifyFromISR(s_cmd_task_handle, CMD_BRIGHTNESS,
-                           eSetBits, NULL);
+        xTaskNotifyFromISR(s_cmd_task_handle, CMD_BRIGHTNESS, eSetBits, NULL);
     }
 }
 
@@ -79,49 +54,63 @@ static void wled_cmd_task(void *arg)
     ESP_LOGI(TAG, "Command task started on core %d", xPortGetCoreID());
 
     for (;;) {
-        // Block until at least one command flag arrives
         uint32_t flags = 0;
         xTaskNotifyWait(0, UINT32_MAX, &flags, portMAX_DELAY);
 
-        // Skip if WiFi isn't up — don't queue up stale commands
         if (wifi_get_state() != WIFI_STATE_CONNECTED) {
-            ESP_LOGD(TAG, "WiFi not connected, dropping command (flags=0x%lx)",
-                     (unsigned long)flags);
+            ESP_LOGD(TAG, "WiFi not connected, dropping command");
             continue;
         }
 
-        // Snapshot the shared state under the spinlock
-        bool    power;
-        uint8_t brightness;
+        // Snapshot shared state
+        bool     power;
+        uint8_t  brightness;
+        uint32_t color;
+        int      preset_id;
         portENTER_CRITICAL(&s_lock);
         power      = s_power;
         brightness = s_brightness;
+        color      = s_color;
+        preset_id  = s_preset_id;
         portEXIT_CRITICAL(&s_lock);
 
-        // Record send time for poll task conflict avoidance
         s_last_sent_us = esp_timer_get_time();
 
-        // Handle power command
+        // Power
         if (flags & CMD_POWER) {
             char payload[32];
-            snprintf(payload, sizeof(payload),
-                     "{\"on\":%s}", power ? "true" : "false");
+            snprintf(payload, sizeof(payload), "{\"on\":%s}", power ? "true" : "false");
             ESP_LOGI(TAG, "POST power -> %s", power ? "ON" : "OFF");
             esp_err_t ret = wled_http_broadcast_post(payload);
-            if (ret != ESP_OK) {
-                ESP_LOGW(TAG, "Power POST failed (will retry on next command)");
-            }
+            if (ret != ESP_OK) ESP_LOGW(TAG, "Power POST failed");
         }
 
-        // Handle brightness command
+        // Brightness
         if (flags & CMD_BRIGHTNESS) {
             char payload[32];
             snprintf(payload, sizeof(payload), "{\"bri\":%d}", brightness);
             ESP_LOGI(TAG, "POST brightness -> %d", brightness);
-            esp_err_t ret = wled_http_broadcast_post(payload);
-            if (ret != ESP_OK) {
-                ESP_LOGW(TAG, "Brightness POST failed");
-            }
+            wled_http_broadcast_post(payload);
+        }
+
+        // Colour — sends to first segment primary colour
+        if (flags & CMD_COLOR) {
+            char payload[64];
+            snprintf(payload, sizeof(payload),
+                     "{\"seg\":[{\"col\":[[%lu,%lu,%lu]]}]}",
+                     (unsigned long)((color >> 16) & 0xFF),
+                     (unsigned long)((color >>  8) & 0xFF),
+                     (unsigned long)( color        & 0xFF));
+            ESP_LOGI(TAG, "POST color -> #%06lX", (unsigned long)color);
+            wled_http_broadcast_post(payload);
+        }
+
+        // Preset
+        if (flags & CMD_PRESET) {
+            char payload[24];
+            snprintf(payload, sizeof(payload), "{\"ps\":%d}", preset_id);
+            ESP_LOGI(TAG, "POST preset -> id=%d", preset_id);
+            wled_http_broadcast_post(payload);
         }
     }
 }
@@ -130,7 +119,6 @@ static void wled_cmd_task(void *arg)
 
 esp_err_t wled_cmd_init(void)
 {
-    // Debounce timer for brightness — one-shot, restarted on each slider event
     const esp_timer_create_args_t timer_cfg = {
         .callback              = bri_debounce_expired,
         .arg                   = NULL,
@@ -140,16 +128,8 @@ esp_err_t wled_cmd_init(void)
     ESP_RETURN_ON_ERROR(esp_timer_create(&timer_cfg, &s_bri_timer),
                         TAG, "esp_timer_create");
 
-    // Dispatch task — pinned to core 0, lower priority than LVGL (5)
     BaseType_t ok = xTaskCreatePinnedToCore(
-        wled_cmd_task,
-        "wled_cmd",
-        4096,
-        NULL,
-        3,      // priority 3: below LVGL (5), below encoder (4), above idle
-        &s_cmd_task_handle,
-        0       // core 0 — same as WiFi driver
-    );
+        wled_cmd_task, "wled_cmd", 4096, NULL, 3, &s_cmd_task_handle, 0);
     if (ok != pdPASS || !s_cmd_task_handle) {
         ESP_LOGE(TAG, "Failed to create wled_cmd task");
         return ESP_FAIL;
@@ -166,11 +146,7 @@ void wled_cmd_set_power(bool on)
     s_power    = on;
     s_pending |= CMD_POWER;
     portEXIT_CRITICAL(&s_lock);
-
-    // Power commands are immediate — no debounce
-    if (s_cmd_task_handle) {
-        xTaskNotify(s_cmd_task_handle, CMD_POWER, eSetBits);
-    }
+    if (s_cmd_task_handle) xTaskNotify(s_cmd_task_handle, CMD_POWER, eSetBits);
 }
 
 void wled_cmd_set_brightness(uint8_t bri)
@@ -179,11 +155,26 @@ void wled_cmd_set_brightness(uint8_t bri)
     s_brightness = bri;
     s_pending   |= CMD_BRIGHTNESS;
     portEXIT_CRITICAL(&s_lock);
+    esp_timer_stop(s_bri_timer);
+    esp_timer_start_once(s_bri_timer, WLED_CMD_BRIGHTNESS_DEBOUNCE_MS * 1000ULL);
+}
 
-    // (Re)start the debounce timer — resets the countdown on every call
-    esp_timer_stop(s_bri_timer);   // no-op if not running
-    esp_timer_start_once(s_bri_timer,
-                         WLED_CMD_BRIGHTNESS_DEBOUNCE_MS * 1000ULL);
+void wled_cmd_set_color(uint32_t rgb)
+{
+    portENTER_CRITICAL(&s_lock);
+    s_color    = rgb;
+    s_pending |= CMD_COLOR;
+    portEXIT_CRITICAL(&s_lock);
+    if (s_cmd_task_handle) xTaskNotify(s_cmd_task_handle, CMD_COLOR, eSetBits);
+}
+
+void wled_cmd_apply_preset(int preset_id)
+{
+    portENTER_CRITICAL(&s_lock);
+    s_preset_id = preset_id;
+    s_pending  |= CMD_PRESET;
+    portEXIT_CRITICAL(&s_lock);
+    if (s_cmd_task_handle) xTaskNotify(s_cmd_task_handle, CMD_PRESET, eSetBits);
 }
 
 bool wled_cmd_recently_sent(uint32_t within_ms)
