@@ -17,6 +17,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "cJSON.h"
+#include "fader/fader.h"
 #include "presets/wled_presets.h"
 #include <string.h>
 
@@ -186,6 +187,8 @@ static void poll_task(void *arg)
         // Push to UI unless we're in the command hold window
         if (!hold) {
             push_to_ui(&state);
+            // Move fader motor to match the polled brightness
+            fader_motor_move_to(state.bri);
 
             // Update the status card with preset name, colour, brightness
             const char *preset_name = "No Preset Loaded";

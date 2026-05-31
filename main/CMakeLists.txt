@@ -13,6 +13,7 @@ idf_component_register(
         "cmd/wled_cmd.c"
         "poll/wled_poll.c"
         "presets/wled_presets.c"
+        "fader/fader.c"
     INCLUDE_DIRS "."
     REQUIRES
         lvgl
@@ -27,4 +28,5 @@ idf_component_register(
         esp_netif
         esp_http_client
         spiffs
+        esp_adc
 )

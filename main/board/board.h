@@ -1,5 +1,6 @@
 #pragma once
- 
+ #include "hal/gpio_types.h"
+#include "hal/adc_types.h"
 /**
  * board.h — Pin assignments for Waveshare ESP32-S3 Touch LCD 3.5"
  *
@@ -69,6 +70,41 @@
 #define PIN_ENC_DT      GPIO_NUM_39
 #define PIN_ENC_SW      GPIO_NUM_40
  
+
+// ── Motorized fader ──────────────────────────────────────────────
+// Potentiometer wiper → GPIO9 (ADC1_CH8, safe with WiFi).
+// TB6612FNG motor driver on Channel A.
+//
+// Pot wiring (unchanged):
+//   Fader pin 3 → GND
+//   Fader pin 4 → VCC3V3 (J8)
+//   Fader pin 5 → J8 IO9  (ADC wiper)
+//
+// Motor wiring:
+//   Fader pin 1 → TB6612 AO1
+//   Fader pin 2 → TB6612 AO2
+//   TB6612 VM   → Boost converter 12 V output
+//   TB6612 MGND → Common GND
+//   TB6612 VCC  → 3.3 V
+//
+// TB6612 control signals → J8 header:
+//   PWMA → J8 IO15  (GPIO15) — PWM speed (full speed = tie HIGH; use LEDC later)
+//   AIN1 → J8 IO16  (GPIO16) — direction bit 1
+//   AIN2 → J8 IO17  (GPIO17) — direction bit 2
+//   STBY → J8 IO21  (GPIO21) — MUST be HIGH or chip is in standby
+//
+// AIN1/AIN2 truth table (PWMA HIGH = full speed):
+//   AIN1=H, AIN2=L → motor drives toward top    (brightness increases)
+//   AIN1=L, AIN2=H → motor drives toward bottom  (brightness decreases)
+//   AIN1=L, AIN2=L → coast (free spin)
+//   AIN1=H, AIN2=H → active brake (holds position)
+#define PIN_FADER_WIPER         GPIO_NUM_9
+#define PIN_FADER_ADC_CHANNEL   ADC_CHANNEL_8   // GPIO9 = ADC1_CH8
+#define PIN_FADER_MOTOR_PWMA    GPIO_NUM_47     // TB6612 PWMA
+#define PIN_FADER_MOTOR_AIN1    GPIO_NUM_48     // TB6612 AIN1
+#define PIN_FADER_MOTOR_AIN2    GPIO_NUM_45     // TB6612 AIN2
+#define PIN_FADER_MOTOR_STBY    GPIO_NUM_46     // TB6612 STBY
+
 // ── Display geometry ─────────────────────────────────────────────
 #define LCD_H_RES       320
 #define LCD_V_RES       480

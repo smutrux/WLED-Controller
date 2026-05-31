@@ -26,6 +26,7 @@
 #include "cmd/wled_cmd.h"
 #include "poll/wled_poll.h"
 #include "presets/wled_presets.h"
+#include "fader/fader.h"
 
 static const char *TAG = "main";
 
@@ -237,6 +238,14 @@ void app_main(void)
 
     // ── Preset fetch task ─────────────────────────────────────────────────────
     xTaskCreatePinnedToCore(preset_fetch_task, "preset_fetch", 12288, NULL, 2, NULL, 0);
+
+    // ── Fader ─────────────────────────────────────────────────────────────────
+    // Reads pot wiper on GPIO9 (ADC1_CH8). Always bound to brightness.
+    // Motor drive is a no-op stub until the MOSFET module arrives.
+    esp_err_t fader_err = fader_init();
+    if (fader_err != ESP_OK) {
+        ESP_LOGW(TAG, "Fader init failed (0x%x) — continuing without fader", fader_err);
+    }
 
     // ── Start LVGL handler task ───────────────────────────────────────────────
     // Pinned to core 1; leave core 0 for WiFi/network tasks in later stages
